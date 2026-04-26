@@ -40,6 +40,7 @@ class Step1Form(forms.ModelForm):
         # The model field stays for backward compat with existing rows.
         fields = [
             'business_category_type',
+            'business_name',
             'business_description',
             'business_type',
             'mcc_code',
@@ -61,6 +62,11 @@ class Step1Form(forms.ModelForm):
                     "talabalar va ofis xodimlari uchun, lunch-set 25k so'm…"
                 ),
             }),
+            'business_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'title': "Biznesingiz nomi",
+                'placeholder': "Masalan: 'Osh Markazi' yoki 'Yulduz Kafe'",
+            }),
             'business_type': forms.TextInput(attrs={
                 'class': 'form-control',
                 'title': "Qanday faoliyat?",
@@ -72,8 +78,9 @@ class Step1Form(forms.ModelForm):
             }),
         }
         labels = {
+            'business_name': 'Biznes nomi',
             'business_description': 'Biznes tavsifi',
-            'business_type': 'Biznes nomi / turi',
+            'business_type': 'Biznes turi',
             'mcc_code': 'Soha (MCC)',
             'target_customer': 'Maqsadli mijozlar',
             'zalog_id': 'Zalog ID',

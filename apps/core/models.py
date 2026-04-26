@@ -216,6 +216,7 @@ class BusinessAnalysisRequest(models.Model):
             "Gemini bu matnni barcha bloklarga kontekst sifatida uzatadi."
         ),
     )
+    business_name = models.CharField(max_length=255, verbose_name="Biznes nomi", blank=True, null=True)
     business_type = models.CharField(max_length=150, verbose_name='Biznes turi')
     mcc_code = models.CharField(max_length=10, choices=MCC_CHOICES, verbose_name='MCC Kategoriya')
     business_category = models.CharField(

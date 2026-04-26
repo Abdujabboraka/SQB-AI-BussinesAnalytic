@@ -207,12 +207,17 @@
           {% if form1.business_description.errors %}<div class="text-danger small mt-1">{{ form1.business_description.errors.0 }}</div>{% endif %}
         </div>
         <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label fw-600">Biznes nomi</label>
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form1.business_name.label }}</label>
+            {{ form1.business_name }}
+            {% if form1.business_name.errors %}<div class="text-danger small mt-1">{{ form1.business_name.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form1.business_type.label }}</label>
             {{ form1.business_type }}
             {% if form1.business_type.errors %}<div class="text-danger small mt-1">{{ form1.business_type.errors.0 }}</div>{% endif %}
           </div>
-          <div class="col-md-6">
+          <div class="col-md-4">
             <label class="form-label fw-600">{{ form1.mcc_code.label }}</label>
             {{ form1.mcc_code }}
             {% if form1.mcc_code.errors %}<div class="text-danger small mt-1">{{ form1.mcc_code.errors.0 }}</div>{% endif %}
@@ -805,7 +810,7 @@
       </div>
 
       <div class="d-flex justify-content-between gap-2 mb-5">
-        <button type="button" class="btn btn-outline-bank" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>Orqaga</button>
+        <button type="button" class="btn btn-outline-bank" onclick="goStep(3)"><i class="bi bi-arrow-left me-1"></i>Orqaga</button>
         <button type="submit" class="btn btn-bank px-5" id="submitBtn">
           <i class="bi bi-cpu me-2"></i>AI Tahlilni Boshlash
         </button>
@@ -842,39 +847,61 @@ document.addEventListener('DOMContentLoaded', () => {
 const TOTAL = 4;
 let currentStep = 1;
 
-function clearStepErrors(stepEl) {
-  stepEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
-  stepEl.querySelectorAll('.field-error-msg').forEach(el => el.remove());
-  const banner = stepEl.querySelector('.step-error-banner');
-  if (banner) banner.remove();
+function isFieldEmpty(el) {
+  const tag = el.tagName;
+  const type = (el.type || '').toLowerCase();
+  if (type === 'checkbox' || type === 'radio') return false;
+  if (tag === 'SELECT') return el.value === '' || el.value === null;
+  return el.value.trim() === '';
 }
 
-function markFieldError(input) {
-  input.classList.add('is-invalid');
-  if (!input.nextElementSibling || !input.nextElementSibling.classList.contains('field-error-msg')) {
-    const msg = document.createElement('div');
-    msg.className = 'field-error-msg text-danger small mt-1';
-    msg.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>' + (input.validationMessage || "Bu maydon to'ldirilishi shart");
-    input.insertAdjacentElement('afterend', msg);
+function isFieldVisible(el) {
+  let node = el;
+  while (node && node !== document.body) {
+    const style = getComputedStyle(node);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    node = node.parentElement;
   }
-  input.addEventListener('input', function h() { input.classList.remove('is-invalid'); input.nextElementSibling?.classList.contains('field-error-msg') && input.nextElementSibling.remove(); input.removeEventListener('input', h); }, { once: true });
+  return true;
 }
 
 function validateStep(stepEl) {
-  clearStepErrors(stepEl);
-  const inputs = stepEl.querySelectorAll('input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])');
-  let invalid = [];
+  stepEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+  stepEl.querySelectorAll('.field-error-msg').forEach(el => el.remove());
+  const old = stepEl.querySelector('.step-error-banner');
+  if (old) old.remove();
+
+  const inputs = stepEl.querySelectorAll(
+    'input[required]:not([type=hidden]):not([type=checkbox]):not([type=radio]), select[required], textarea[required]'
+  );
+  const invalid = [];
   for (const input of inputs) {
-    const panel = input.closest('.category-panel, .bank-fields-section');
-    if (panel && panel.style.display === 'none') continue;
-    if (!input.checkValidity()) { markFieldError(input); invalid.push(input); }
+    if (!isFieldVisible(input)) continue;
+    if (isFieldEmpty(input)) {
+      input.classList.add('is-invalid');
+      const wrap = input.closest('.mb-3, .col-md-4, .col-md-6, .col-md-8, .col-md-12, .col-12, .input-group');
+      const errId = 'err_' + (input.id || input.name);
+      if (wrap && !wrap.querySelector('.field-error-msg')) {
+        const msg = document.createElement('div');
+        msg.className = 'field-error-msg text-danger small mt-1';
+        msg.id = errId;
+        msg.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Bu maydon to\'ldirilishi shart';
+        wrap.appendChild(msg);
+      }
+      input.addEventListener('input', () => {
+        input.classList.remove('is-invalid');
+        const m = document.getElementById(errId);
+        if (m) m.remove();
+      }, { once: true });
+      invalid.push(input);
+    }
   }
   if (invalid.length) {
     const banner = document.createElement('div');
     banner.className = 'step-error-banner alert alert-danger d-flex align-items-center gap-2 mb-3 py-2';
-    banner.innerHTML = `<i class="bi bi-exclamation-triangle-fill fs-5"></i><span>${invalid.length} ta maydon to'ldirilmagan. Iltimos, qizil maydonlarni to'ldiring.</span>`;
+    banner.innerHTML = `<i class="bi bi-exclamation-triangle-fill fs-5"></i><span>${invalid.length} ta majburiy maydon to'ldirilmagan.</span>`;
     stepEl.prepend(banner);
-    invalid[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     return false;
   }
   return true;
@@ -911,7 +938,17 @@ function goStep(n) {
     }
   });
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (n === 3 && typeof refreshMapPicker === 'function') refreshMapPicker('map-picker');
+  if (n === 3) {
+    const latInput = document.querySelector('[name$="latitude"]');
+    const lngInput = document.querySelector('[name$="longitude"]');
+    if (latInput && lngInput && typeof initMapPicker === 'function') {
+      if (!window.__biznesMapPickers || !window.__biznesMapPickers['map-picker']) {
+        setTimeout(() => initMapPicker('map-picker', latInput.id || latInput.name, lngInput.id || lngInput.name, 'coord-hint'), 50);
+      } else if (typeof refreshMapPicker === 'function') {
+        refreshMapPicker('map-picker');
+      }
+    }
+  }
   if (typeof saveDraft === 'function') saveDraft();
 }
 
@@ -1243,7 +1280,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const latInput = document.querySelector('[name$="latitude"]');
   const lngInput = document.querySelector('[name$="longitude"]');
   if (latInput && lngInput) {
-    initMapPicker('map-picker', latInput.id || latInput.name, lngInput.id || lngInput.name, 'coord-hint');
+    // Map is initialized lazily in goStep(3) so it renders inside a visible container
     let lookupTimer = null;
     const runLookup = () => {
       clearTimeout(lookupTimer);
@@ -1544,17 +1581,16 @@ document.addEventListener('DOMContentLoaded', () => {
     wizardFormEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
     wizardFormEl.querySelectorAll('.field-error.dynamic').forEach(el => el.remove());
     wizardFormEl.querySelectorAll('input, select, textarea').forEach(el => {
-      if (el.disabled) return;
+      if (el.disabled || el.type === 'hidden') return;
+      const step = el.closest('.wizard-step');
+      if (step && !step.classList.contains('active')) return;
       if (!el.checkValidity()) {
         el.classList.add('is-invalid');
         if (!firstInvalid) firstInvalid = el;
-        const msg = document.createElement('div');
-        msg.className = 'field-error dynamic';
-        msg.textContent = el.validationMessage || "Maydon to'ldirilishi shart";
-        (el.parentElement || el).appendChild(msg);
       }
     });
     if (firstInvalid) {
+      firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
       firstInvalid.focus();
       return;
     }
