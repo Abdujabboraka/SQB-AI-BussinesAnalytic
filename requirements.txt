@@ -11,3 +11,4 @@ python-decouple>=3.8
 psycopg2-binary>=2.9
 weasyprint>=62.0
 requests>=2.31
+reportlab>=4.0.0

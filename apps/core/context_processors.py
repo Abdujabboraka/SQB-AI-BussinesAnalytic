@@ -38,6 +38,7 @@ def ai_providers(request):
         })
 
     from apps.core.models import SystemConfiguration
+    from django.core.cache import cache
     try:
         active_provider = SystemConfiguration.get_solo().active_ai_provider
     except:
@@ -45,5 +46,6 @@ def ai_providers(request):
 
     for p in providers:
         p['is_active'] = (p['id'] == active_provider)
+        p['is_working'] = cache.get(f"ai_health_{p['id']}", True)
 
     return {'available_ai_providers': providers}

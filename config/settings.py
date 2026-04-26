@@ -125,6 +125,7 @@ CELERY_TASK_EAGER_PROPAGATES = True
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 HUGGINGFACE_API_TOKEN = config('HUGGINGFACE_API_TOKEN', default='')
 OPENAI_API_KEY = config('OPENAI_API_KEY', default=config('openai_api_key', default=''))
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.0-flash')
 SERPER_API_URL = config('SERPER_API_URL', default='https://google.serper.dev')
 SERPER_API_KEY = config('SERPER_API_KEY', default='')

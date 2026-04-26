@@ -54,14 +54,22 @@ class AIDispatcher:
         return getattr(self._service, 'model_name', f"Unknown ({self.provider})")
 
     def _call_with_fallback(self, method_name, *args, **kwargs):
-        fallback_order = ['gemini', 'openai', 'anthropic']
+        from django.core.cache import cache
+        fallback_order = ['gemini', 'openai', 'anthropic', 'huggingface']
         if self.provider in fallback_order:
             fallback_order.remove(self.provider)
         fallback_order.insert(0, self.provider)
 
         for provider in fallback_order:
+            cache_key = f'ai_health_{provider}'
+            is_healthy = cache.get(cache_key, True)
+
+            if not is_healthy:
+                logger.info(f"Skipping '{provider}' as it is marked unhealthy in cache.")
+                continue
+
             if provider != self.provider:
-                logger.warning(f"AI Provider failed or returned mock. Failing over to '{provider}'.")
+                logger.warning(f"Failing over to '{provider}'.")
                 self.provider = provider
                 if self.config:
                     self.config.active_ai_provider = provider
@@ -72,9 +80,14 @@ class AIDispatcher:
                 method = getattr(self._service, method_name)
                 result = method(*args, **kwargs)
                 if result and not result.get('is_mock'):
+                    cache.set(cache_key, True, timeout=3600)
                     return result
+                else:
+                    logger.warning(f"Provider '{provider}' returned mock or None. Marking unhealthy.")
+                    cache.set(cache_key, False, timeout=3600)
             except Exception as e:
                 logger.error(f"Error calling {method_name} on {provider}: {e}")
+                cache.set(cache_key, False, timeout=3600)
 
         # If all fail, use mock
         logger.warning(f"All AI providers failed for {method_name}. Using mock.")

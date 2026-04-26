@@ -60,10 +60,19 @@
                   {% if provider.is_active %}<i class="bi bi-check-circle-fill text-success ms-2"></i>{% endif %}
                 </a></li>
               {% else %}
-                <li><a class="dropdown-item {% if provider.is_active %}fw-bold bg-light{% endif %}" href="{% url 'switch_ai_provider' provider=provider.id %}">
-                  <i class="bi {{ provider.icon }} me-2"></i>{{ provider.name }}
-                  {% if provider.is_active %}<i class="bi bi-check-circle-fill text-success ms-2"></i>{% endif %}
-                </a></li>
+                <li>
+                  {% if not provider.is_working %}
+                  <a class="dropdown-item text-muted" href="#" style="pointer-events: none; opacity: 0.6;" title="API Limit yoki Xato">
+                    <i class="bi {{ provider.icon }} me-2"></i><del>{{ provider.name }}</del>
+                    <span class="badge bg-danger ms-2" style="font-size:0.6rem">Limit / Xato</span>
+                  </a>
+                  {% else %}
+                  <a class="dropdown-item {% if provider.is_active %}fw-bold bg-light{% endif %}" href="{% url 'switch_ai_provider' provider=provider.id %}">
+                    <i class="bi {{ provider.icon }} me-2"></i>{{ provider.name }}
+                    {% if provider.is_active %}<i class="bi bi-check-circle-fill text-success ms-2"></i>{% endif %}
+                  </a>
+                  {% endif %}
+                </li>
               {% endif %}
             {% empty %}
                 <li><a class="dropdown-item text-muted" href="#"><i class="bi bi-x-circle me-2"></i>Provayderlar yo'q</a></li>
