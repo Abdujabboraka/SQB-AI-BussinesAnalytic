@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8">
+  <title>BiznesAI — Kredit Tahlil Xulosasi — {{ analysis.business_type }}</title>
+  <style>
+    /* ── Base ── */
+    @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'DejaVu Sans', Arial, sans-serif; color: #0F172A; background: white; font-size: 11px; line-height: 1.55; }
+
+    /* ── Page header (repeats on every page) ── */
+    .page-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 0 10px 0; margin-bottom: 14px;
+      border-bottom: 3px solid #1B4FD8;
+    }
+    .org-name { font-size: 9px; font-weight: 700; color: #1B4FD8; text-transform: uppercase; letter-spacing: 0.6px; }
+    .org-sub  { font-size: 8px; color: #64748B; margin-top: 1px; }
+    .doc-stamp { text-align: right; }
+    .doc-stamp .doc-num { font-size: 9px; font-weight: 700; color: #334155; }
+    .doc-stamp .doc-date { font-size: 8px; color: #64748B; }
+
+    /* ── Hero banner ── */
+    .hero {
+      background: #F9FAFB;
+      color: #111827; padding: 20px 24px; border-radius: 8px; margin-bottom: 16px;
+      border: 1px solid #D1D5DB;
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .hero h1 { font-size: 17px; font-weight: 800; margin-bottom: 4px; letter-spacing: -0.3px; }
+    .hero p  { font-size: 9.5px; color: #4B5563; margin-bottom: 2px; }
+    .hero-rec { text-align: right; }
+    .rec-badge {
+      display: inline-block; padding: 5px 14px; border-radius: 20px;
+      font-weight: 800; font-size: 13px; border: 1px solid #D1D5DB;
+    }
+    .rec-yes  { background: #ECFDF3; color: #166534; }
+    .rec-no   { background: #FEF2F2; color: #B91C1C; }
+    .rec-caut { background: #FFFBEB; color: #92400E; }
+    .hero-score { font-size: 28px; font-weight: 900; color: #111827; margin-top: 6px; }
+    .hero-score span { font-size: 13px; font-weight: 400; opacity: 0.7; }
+
+    /* ── Section ── */
+    .section { margin-bottom: 16px; page-break-inside: avoid; }
+    .section-title {
+      font-size: 10px; font-weight: 800; color: #1B4FD8;
+      text-transform: uppercase; letter-spacing: 0.7px;
+      padding: 5px 10px; background: #EEF2FF;
+      border-left: 4px solid #1B4FD8; border-radius: 0 5px 5px 0;
+      margin-bottom: 10px;
+    }
+
+    /* ── Info grid ── */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .info-cell {
+      background: #F8FAFF; border: 1px solid #E0E8FF;
+      border-radius: 6px; padding: 10px 12px;
+    }
+    .info-cell .lbl { font-size: 8.5px; color: #64748B; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+    .info-cell .val { font-size: 12px; font-weight: 800; color: #0F172A; }
+
+    /* ── Score blocks ── */
+    .block-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-bottom: 1px solid #F1F5F9;
+    }
+    .block-row:last-child { border-bottom: none; }
+    .block-letter {
+      width: 26px; height: 26px; border-radius: 6px;
+      background: #1B4FD8; color: white;
+      font-weight: 800; font-size: 11px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .block-label { flex: 1; font-size: 11px; color: #334155; }
+    .block-score-bar { width: 100px; height: 6px; background: #E2E8F0; border-radius: 3px; overflow: hidden; }
+    .block-score-fill { height: 100%; border-radius: 3px; background: #1B4FD8; }
+    .block-score-num { width: 42px; text-align: right; font-weight: 700; font-size: 11px; }
+
+    /* ── Commentary box ── */
+    .commentary {
+      background: #F8FAFF; border: 1px solid #DBEAFE;
+      border-left: 4px solid #1B4FD8; border-radius: 0 6px 6px 0;
+      padding: 10px 14px; font-size: 10.5px; line-height: 1.7; color: #334155;
+    }
+
+    /* ── Metric row (SQB) ── */
+    .sqb-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+    .sqb-cell {
+      background: #F8FAFF; border: 1px solid #E0E8FF;
+      border-radius: 6px; padding: 9px 10px; text-align: center;
+    }
+    .sqb-cell .v { font-size: 14px; font-weight: 800; margin-bottom: 2px; }
+    .sqb-cell .l { font-size: 8px; color: #64748B; font-weight: 600; }
+    .sqb-cell.ok   { border-color: #86EFAC; background: #F0FDF4; }
+    .sqb-cell.warn { border-color: #FDE68A; background: #FFFBEB; }
+    .sqb-cell.fail { border-color: #FCA5A5; background: #FFF1F1; }
+
+    /* ── CBU Checklist ── */
+    .cbu-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #F8FAFC; }
+    .cbu-icon { font-size: 12px; width: 18px; flex-shrink: 0; }
+    .cbu-name { flex: 1; font-size: 10.5px; }
+    .cbu-val  { font-weight: 800; font-size: 10.5px; }
+
+    /* ── Competitors table ── */
+    .comp-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+    .comp-table th { background: #1B4FD8; color: white; font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; padding: 6px 10px; font-weight: 700; }
+    .comp-table td { padding: 6px 10px; font-size: 10px; border-bottom: 1px solid #F1F5F9; }
+    .comp-table tr:nth-child(even) td { background: #F8FAFF; }
+    .risk-low  { color: #16A34A; font-weight: 700; }
+    .risk-mid  { color: #D97706; font-weight: 700; }
+    .risk-high { color: #DC2626; font-weight: 700; }
+
+    /* ── Financial table ── */
+    .fin-table { width: 100%; border-collapse: collapse; }
+    .fin-table td { padding: 6px 10px; font-size: 10.5px; border-bottom: 1px solid #F1F5F9; }
+    .fin-table td:first-child { color: #64748B; font-weight: 600; width: 55%; }
+    .fin-table td:last-child  { font-weight: 700; text-align: right; }
+    .fin-table tr:nth-child(even) td { background: #F8FAFF; }
+
+    /* ── External checks ── */
+    .ext-check {
+      border: 1px solid #E2E8F0; border-radius: 6px;
+      padding: 8px 12px; margin-bottom: 8px; page-break-inside: avoid;
+    }
+    .ext-check .ext-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .ext-check .ext-title { font-weight: 700; font-size: 11px; }
+    .ext-check .ext-body  { font-size: 10px; color: #475569; }
+    .status-tag { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 9px; font-weight: 700; }
+    .tag-ok   { background: #DCFCE7; color: #166534; }
+    .tag-warn { background: #FEF3C7; color: #92400E; }
+    .tag-fail { background: #FEE2E2; color: #991B1B; }
+
+    /* ── Signature block ── */
+    .sig-block { margin-top: 20px; display: flex; gap: 24px; padding-top: 14px; border-top: 1px solid #CBD5E1; }
+    .sig-col { flex: 1; }
+    .sig-line { border-top: 1px solid #CBD5E1; margin-top: 28px; padding-top: 5px; font-size: 9px; color: #64748B; }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 20px; padding-top: 10px;
+      border-top: 2px solid #1B4FD8;
+      display: flex; justify-content: space-between;
+      font-size: 8.5px; color: #94A3B8;
+    }
+    .footer b { color: #1B4FD8; }
+
+    /* ── Page break ── */
+    .page-break { page-break-before: always; margin-top: 0; padding-top: 14px; }
+    .no-break { page-break-inside: avoid; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ PAGE HEADER ════════════════════════════════════════════ -->
+<div class="page-header">
+  <div>
+    <div class="org-name">O'zbekiston Respublikasi — SQB Bank (Sanoat Qurilish Banki)</div>
+    <div class="org-sub">Kichik va O'rta Biznesni Moliyalashtirish Bo'limi — Kredit Tahlil Xulosasi</div>
+  </div>
+  <div class="doc-stamp">
+    <div class="doc-num">№ BiznesAI-{{ analysis.pk }}/{{ analysis.created_at|date:"Y" }}</div>
+    <div class="doc-date">Sana: {{ analysis.created_at|date:"d.m.Y" }} &nbsp;|&nbsp; Vaqt: {{ analysis.created_at|date:"H:i" }}</div>
+  </div>
+</div>
+
+<!-- ═══ HERO ════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div>
+    <h1>Kredit Layoqati Tahlili</h1>
+    <p>Biznes turi: <strong>{{ analysis.business_type }}</strong></p>
+    <p>Mijoz: {{ analysis.client.get_full_name|default:analysis.client.username }}</p>
+    <p>MCC kodi: {{ analysis.mcc_code }} — {{ analysis.get_mcc_code_display }}</p>
+    <p>Joylashuv: {{ analysis.district }}{% if analysis.address_detail %}, {{ analysis.address_detail }}{% endif %}</p>
+  </div>
+  <div class="hero-rec">
+    {% if analysis.final_recommendation == 'YES' %}
+      <span class="rec-badge rec-yes">✓ TAVSIYA ETILADI</span>
+    {% elif analysis.final_recommendation == 'NO' %}
+      <span class="rec-badge rec-no">✗ TAVSIYA ETILMAYDI</span>
+    {% else %}
+      <span class="rec-badge rec-caut">⚠ EHTIYOT BILAN</span>
+    {% endif %}
+    <div class="hero-score">
+      {{ analysis.final_score|floatformat:1|default:"—" }}<span>/100</span>
+    </div>
+    <div style="font-size:9px;color:#6B7280;margin-top:2px">Kompozit AI Ball</div>
+  </div>
+</div>
+
+<!-- ═══ BIZNES MA'LUMOTLARI ════════════════════════════════════ -->
+<div class="section no-break">
+  <div class="section-title">1. Biznes Identifikatsiyasi</div>
+  <div class="info-grid">
+    <div class="info-cell"><div class="lbl">Biznes Turi</div><div class="val">{{ analysis.business_type }}</div></div>
+    <div class="info-cell"><div class="lbl">Kategoriya</div><div class="val">{{ analysis.get_business_category_type_display }}</div></div>
+    <div class="info-cell"><div class="lbl">MCC Kod</div><div class="val">{{ analysis.mcc_code }}</div></div>
+    <div class="info-cell"><div class="lbl">Tuman</div><div class="val">{{ analysis.district }}</div></div>
+    <div class="info-cell"><div class="lbl">Ochilish Sanasi</div><div class="val">{{ analysis.planned_opening_date|default:"—" }}</div></div>
+    <div class="info-cell"><div class="lbl">Xodimlar Soni</div><div class="val">{{ analysis.num_employees }}</div></div>
+  </div>
+  {% if analysis.business_description %}
+  <div style="margin-top:10px">
+    <div class="commentary">{{ analysis.business_description }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ═══ MOLIYAVIY KO'RSATKICHLAR ══════════════════════════════ -->
+<div class="section no-break">
+  <div class="section-title">2. Moliyaviy Ko'rsatkichlar</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <table class="fin-table">
+      <tr><td>Jami sarmoya</td><td>{{ analysis.investment_amount|floatformat:0 }} so'm</td></tr>
+      <tr><td>Kredit miqdori</td><td>{{ analysis.loan_amount|floatformat:0 }} so'm</td></tr>
+      <tr><td>O'z mablag'i</td><td>{{ analysis.own_capital|floatformat:0 }} so'm</td></tr>
+      <tr><td>Oylik ijara</td><td>{{ analysis.monthly_rent_uzs|floatformat:0 }} so'm</td></tr>
+      <tr><td>Oylik maosh fondi</td><td>{{ analysis.monthly_salary_budget|floatformat:0 }} so'm</td></tr>
+      <tr><td>Kommunal xarajatlar</td><td>{{ analysis.monthly_utilities|floatformat:0 }} so'm</td></tr>
+    </table>
+    <table class="fin-table">
+      <tr><td>Kunlik kutilgan mijozlar</td><td>{{ analysis.expected_daily_customers }}</td></tr>
+      <tr><td>O'rtacha chek</td><td>{{ analysis.average_check_uzs|floatformat:0 }} so'm</td></tr>
+      <tr><td>Haftalik ish kunlari</td><td>{{ analysis.working_days_per_week }}</td></tr>
+      <tr><td>Tannarx ulushi</td><td>{{ analysis.cogs_percentage }}%</td></tr>
+      <tr><td>Qaytarilish muddati</td><td>{{ analysis.desired_payback_months }} oy</td></tr>
+      <tr><td>Maydon</td><td>{{ analysis.floor_area_sqm }} m²</td></tr>
+    </table>
+  </div>
+  {% if block_b %}
+  <div style="margin-top:10px">
+    <div class="info-grid">
+      <div class="info-cell"><div class="lbl">P10 Daromad (pessimistik)</div><div class="val" style="color:#DC2626">{{ block_b.revenue_p10|floatformat:0 }} so'm/oy</div></div>
+      <div class="info-cell"><div class="lbl">P50 Daromad (o'rtacha)</div><div class="val" style="color:#1B4FD8">{{ block_b.revenue_p50|floatformat:0 }} so'm/oy</div></div>
+      <div class="info-cell"><div class="lbl">P90 Daromad (optimistik)</div><div class="val" style="color:#16A34A">{{ block_b.revenue_p90|floatformat:0 }} so'm/oy</div></div>
+    </div>
+  </div>
+  {% endif %}
+  {% if block_d %}
+  <div style="margin-top:10px">
+    <div class="info-grid">
+      <div class="info-cell"><div class="lbl">Zararni Qoplash Muddati</div><div class="val">{{ block_d.breakeven_months|floatformat:1 }} oy</div></div>
+      <div class="info-cell"><div class="lbl">12 Oylik ROI</div><div class="val">{{ block_d.roi_12mo|floatformat:1 }}%</div></div>
+      <div class="info-cell"><div class="lbl">NPV (5 yil)</div><div class="val">{{ block_d.npv_5yr|floatformat:0 }} so'm</div></div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ═══ 5 BLOK AI NATIJALARI ══════════════════════════════════ -->
+<div class="section no-break">
+  <div class="section-title">3. Sun'iy Intellekt Tahlili (5 Blok)</div>
+  {% if block_a %}
+  <div class="block-row">
+    <span class="block-letter">A</span>
+    <span class="block-label"><b>Bozor Tahlili</b> — Nisha bali: {{ block_a.niche_opportunity_score|floatformat:0 }}/100</span>
+    <div class="block-score-bar"><div class="block-score-fill" style="width:{{ block_a.niche_opportunity_score }}%"></div></div>
+    <span class="block-score-num" style="color:#1B4FD8">{{ block_a.niche_opportunity_score|floatformat:0 }}</span>
+  </div>
+  {% endif %}
+  {% if block_b %}
+  <div class="block-row">
+    <span class="block-letter">B</span>
+    <span class="block-label"><b>Talab Prognozi</b> — P50: {{ block_b.revenue_p50|floatformat:0 }} so'm/oy</span>
+    <div class="block-score-bar"><div class="block-score-fill" style="width:{{ block_b.demand_score }}%"></div></div>
+    <span class="block-score-num" style="color:#1B4FD8">{{ block_b.demand_score|floatformat:0 }}</span>
+  </div>
+  {% endif %}
+  {% if block_c %}
+  <div class="block-row">
+    <span class="block-letter">C</span>
+    <span class="block-label"><b>Joylashuv Tahlili</b> — Bali: {{ block_c.location_score|floatformat:0 }}/100</span>
+    <div class="block-score-bar"><div class="block-score-fill" style="width:{{ block_c.location_score }}%"></div></div>
+    <span class="block-score-num" style="color:#1B4FD8">{{ block_c.location_score|floatformat:0 }}</span>
+  </div>
+  {% endif %}
+  {% if block_d %}
+  <div class="block-row">
+    <span class="block-letter">D</span>
+    <span class="block-label"><b>Moliyaviy Tahlil</b> — BEP: {{ block_d.breakeven_months|floatformat:1 }} oy · ROI {{ block_d.roi_12mo|floatformat:1 }}%</span>
+    <div class="block-score-bar"><div class="block-score-fill" style="width:{{ block_d.viability_score }}%"></div></div>
+    <span class="block-score-num" style="color:#1B4FD8">{{ block_d.viability_score|floatformat:0 }}</span>
+  </div>
+  {% endif %}
+  {% if block_e %}
+  <div class="block-row">
+    <span class="block-letter" style="background:#DC2626">E</span>
+    <span class="block-label"><b>Raqobat & Risk</b> — Bozor risk bali: {{ block_e.market_risk_score|floatformat:0 }}/100</span>
+    <div class="block-score-bar"><div class="block-score-fill" style="width:{{ block_e.market_risk_score }}%;background:{% if block_e.market_risk_score <= 40 %}#16A34A{% elif block_e.market_risk_score <= 65 %}#D97706{% else %}#DC2626{% endif %}"></div></div>
+    <span class="block-score-num" style="color:{% if block_e.market_risk_score <= 40 %}#16A34A{% elif block_e.market_risk_score <= 65 %}#D97706{% else %}#DC2626{% endif %}">{{ block_e.market_risk_score|floatformat:0 }}</span>
+  </div>
+  {% endif %}
+
+  {% if analysis.final_commentary %}
+  <div style="margin-top:12px">
+    <div class="commentary">
+      <strong>AI Yakuniy Xulosa:</strong><br>{{ analysis.final_commentary }}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ═══ SQB KREDIT BAHOSI ════════════════════════════════════ -->
+{% if sqb %}
+<div class="section no-break page-break">
+  <div class="section-title">4. SQB Kredit Bahosi (CBU 2025 Standartlari)</div>
+  <div class="sqb-grid">
+    <div class="sqb-cell {% if sqb.composite_score >= 60 %}ok{% elif sqb.composite_score >= 40 %}warn{% else %}fail{% endif %}">
+      <div class="v">{{ sqb.composite_score|floatformat:0 }}</div>
+      <div class="l">KOMPOZIT BALL</div>
+    </div>
+    <div class="sqb-cell {% if sqb.flags.dsc_ok %}ok{% else %}fail{% endif %}">
+      <div class="v">{{ sqb.dsc_ratio|floatformat:2 }}</div>
+      <div class="l">DSC NISBATI (≥1.25)</div>
+    </div>
+    <div class="sqb-cell {% if sqb.flags.collateral_ok %}ok{% else %}fail{% endif %}">
+      <div class="v">{{ sqb.collateral_coverage|floatformat:2 }}×</div>
+      <div class="l">GAROV QOPLAMA (≥1.25)</div>
+    </div>
+    <div class="sqb-cell {% if sqb.flags.debt_burden_ok %}ok{% else %}fail{% endif %}">
+      <div class="v">{{ sqb.debt_burden_pct|floatformat:1 }}%</div>
+      <div class="l">QARZ YUKI (≤50%)</div>
+    </div>
+  </div>
+
+  <div style="margin-top:8px">
+    <div class="cbu-row"><span class="cbu-icon">{% if sqb.flags.dsc_ok %}OK{% else %}NO{% endif %}</span><span class="cbu-name">Daromad xizmat qoplamasi (DSC ≥ 1.25)</span><span class="cbu-val {% if sqb.flags.dsc_ok %}risk-low{% else %}risk-high{% endif %}">{{ sqb.dsc_ratio|floatformat:2 }}</span></div>
+    <div class="cbu-row"><span class="cbu-icon">{% if sqb.flags.collateral_ok %}OK{% else %}NO{% endif %}</span><span class="cbu-name">Garov ta'minot darajasi (≥ 1.25×)</span><span class="cbu-val {% if sqb.flags.collateral_ok %}risk-low{% else %}risk-high{% endif %}">{{ sqb.collateral_coverage|floatformat:2 }}×</span></div>
+    <div class="cbu-row"><span class="cbu-icon">{% if sqb.flags.debt_burden_ok %}OK{% else %}NO{% endif %}</span><span class="cbu-name">Qarz yuki koeffitsienti (≤ 50%)</span><span class="cbu-val {% if sqb.flags.debt_burden_ok %}risk-low{% else %}risk-high{% endif %}">{{ sqb.debt_burden_pct|floatformat:1 }}%</span></div>
+    <div class="cbu-row"><span class="cbu-icon">{% if sqb.flags.own_capital_ok %}OK{% else %}NO{% endif %}</span><span class="cbu-name">O'z ulushi (≥ 20% jami sarmoyadan)</span><span class="cbu-val {% if sqb.flags.own_capital_ok %}risk-low{% else %}risk-high{% endif %}">{{ analysis.own_capital|floatformat:0 }} so'm</span></div>
+  </div>
+
+  <div style="margin-top:10px;padding:10px 12px;background:#EEF2FF;border-radius:6px;border-left:4px solid #1B4FD8">
+    <strong>SQB Xulosasi:</strong> {{ sqb.verdict }}
+    {% if sqb.grace_period_months %} · Imtiyozli davr: <strong>{{ sqb.grace_period_months }} oy</strong>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ═══ RAQOBATCHILAR ══════════════════════════════════════════ -->
+{% if block_e and block_e.competitors_1km %}
+<div class="section no-break">
+  <div class="section-title">5. Raqobat Muhiti (1 km radius)</div>
+  <table class="comp-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Biznes Nomi</th>
+        <th>Turi</th>
+        <th>Masofa</th>
+        <th>Yopilish Ehtimoli</th>
+        <th>Bozordagi Muddat</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in block_e.competitors_1km|slice:":12" %}
+      <tr>
+        <td>{{ forloop.counter }}</td>
+        <td><strong>{{ c.name|default:"Noma'lum" }}</strong></td>
+        <td>{{ c.type|default:"—" }}</td>
+        <td>{{ c.distance_m }} m</td>
+        <td class="{% if c.closure_probability >= 0.3 %}risk-high{% elif c.closure_probability >= 0.15 %}risk-mid{% else %}risk-low{% endif %}">
+          {{ c.closure_probability|floatformat:0 }}%
+        </td>
+        <td>{{ c.age_years|default:"?" }} yil</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if block_e.entry_barriers %}
+  <div style="margin-top:10px">
+    <div class="commentary"><strong>Kirish to'siqlari:</strong> {{ block_e.entry_barriers }}</div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- ═══ TASHQI MANBALAR ════════════════════════════════════════ -->
+{% if external_checks.checks %}
+<div class="section page-break">
+  <div class="section-title">6. Tashqi Manbalar Bo'yicha Tekshiruv</div>
+  {% if external_checks.summary %}
+  <div style="font-size:10px;color:#475569;margin-bottom:10px;padding:8px 12px;background:#F8FAFF;border-radius:5px;border-left:3px solid #94A3B8">
+    {{ external_checks.summary }}
+  </div>
+  {% endif %}
+  {% for check in external_checks.checks %}
+  <div class="ext-check">
+    <div class="ext-top">
+      <span class="ext-title">{{ check.title }}</span>
+      <span class="status-tag {% if check.status == 'ok' %}tag-ok{% elif check.status == 'warn' %}tag-warn{% else %}tag-fail{% endif %}">
+        {% if check.status == 'ok' %}MUVOFIQ{% elif check.status == 'warn' %}EHTIYOT{% else %}MUAMMO{% endif %}
+      </span>
+    </div>
+    <div class="ext-body">{{ check.feedback }}</div>
+    {% if check.sources %}
+    <div style="margin-top:5px;font-size:9px;color:#94A3B8">
+      Manbalar: {% for src in check.sources|slice:":3" %}{{ src.domain }}{% if not forloop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- ═══ IMZOLAR ════════════════════════════════════════════════ -->
+<div class="sig-block no-break">
+  <div class="sig-col">
+    <div style="font-size:10px;font-weight:700;color:#334155">Tahlil tuzuvchi:</div>
+    <div style="font-size:9.5px;color:#475569;margin-top:3px">BiznesAI Tizimi (Sun'iy Intellekt)</div>
+    <div class="sig-line">Imzo: _______________________</div>
+  </div>
+  <div class="sig-col">
+    <div style="font-size:10px;font-weight:700;color:#334155">Kredit mutaxassisi:</div>
+    <div style="font-size:9.5px;color:#475569;margin-top:3px">F.I.Sh.: _____________________</div>
+    <div class="sig-line">Imzo: _______________________</div>
+  </div>
+  <div class="sig-col">
+    <div style="font-size:10px;font-weight:700;color:#334155">Bo'lim boshlig'i:</div>
+    <div style="font-size:9.5px;color:#475569;margin-top:3px">F.I.Sh.: _____________________</div>
+    <div class="sig-line">Imzo/Muhri: __________________</div>
+  </div>
+</div>
+
+<!-- ═══ FOOTER ══════════════════════════════════════════════════ -->
+<div class="footer">
+  <div>
+    <b>SQB Bank — BiznesAI</b> · Kichik va O'rta Biznesni Moliyalashtirish Bo'limi<br>
+    Tahlil № {{ analysis.pk }} · Sana: {{ analysis.created_at|date:"d.m.Y H:i" }}
+  </div>
+  <div style="text-align:right">
+    Mijoz: <b>{{ analysis.client.get_full_name|default:analysis.client.username }}</b><br>
+    <em>Ushbu hujjat BiznesAI tizimi tomonidan avtomatik yaratilgan.</em>
+  </div>
+</div>
+
+</body>
+</html>

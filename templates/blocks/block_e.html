@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}E Blok — Raqobat va Risk — BiznesAI{% endblock %}
+{% block content %}
+<div class="container-fluid px-4">
+  <nav class="mb-3"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="/analysis/{{ analysis.pk }}/dashboard/" class="text-bank">Dashboard</a></li>
+    <li class="breadcrumb-item active">E Blok</li>
+  </ol></nav>
+
+  <div class="page-header mb-4">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <h1 class="h4 mb-1"><i class="bi bi-shield-exclamation me-2"></i>E Bloki — Raqobat va Risk Tahlili</h1>
+        <p class="subtitle mb-0">Raqobatchilar xaritasi · Yopilish ehtimoli · Kirish to'siqlari</p>
+      </div>
+      {% if block %}<span class="score-badge {% if block.market_risk_score <= 40 %}score-badge-green{% elif block.market_risk_score <= 65 %}score-badge-amber{% else %}score-badge-red{% endif %} fs-6">
+        Risk: {{ block.market_risk_score|floatformat:0 }}/100
+      </span>{% endif %}
+    </div>
+  </div>
+
+  {% if not block %}
+  <div class="card-premium p-5 text-center"><div style="font-size:3rem">⏳</div><h5 class="mt-3">Tahlil hali tugamagan</h5></div>
+  {% else %}
+
+  {% if block.is_mock %}<div class="mock-warning mb-3"><i class="bi bi-info-circle"></i>Demo ma'lumotlar — Gemini API kaliti kiritilmagan</div>{% endif %}
+
+  <!-- Risk Metrics -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">Bozor Risk Bali</div>
+        <div class="metric-value {% if block.market_risk_score <= 40 %}text-green{% elif block.market_risk_score <= 65 %}text-amber{% else %}text-red{% endif %}">
+          {{ block.market_risk_score|floatformat:0 }}<span class="fs-5 text-muted">/100</span>
+        </div>
+        <div class="progress-custom mt-2">
+          <div class="progress-bar" style="width:{{ block.market_risk_score }}%;background:{% if block.market_risk_score <= 40 %}var(--green){% elif block.market_risk_score <= 65 %}var(--amber){% else %}var(--red){% endif %}"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">300m Raqobatchilar</div>
+        <div class="metric-value">{{ block.competitors_300m|length }}</div>
+        <div class="metric-label">ta</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">Yillik Yopilish Darajasi</div>
+        <div class="metric-value text-amber">{{ block.district_churn_rate|floatformat:1 }}%</div>
+        <div class="metric-label">{{ analysis.district }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Competitor Map -->
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6><i class="bi bi-map me-2 text-bank"></i>Raqobatchilar Xaritasi</h6>
+      <div class="small text-muted">Doiraning rangi yopilish ehtimolini ko'rsatadi</div>
+    </div>
+    <div class="p-2">
+      <div id="competitor-map"
+           data-lat="{{ analysis.latitude }}"
+           data-lng="{{ analysis.longitude }}"
+           data-competitors="{{ competitors_json }}"
+           data-anchors="[]"
+           data-mode="competition">
+      </div>
+    </div>
+  </div>
+
+  <!-- Closure Probability Chart -->
+  {% if block.competitors_1km %}
+  <div class="chart-wrapper mb-4">
+    <div class="chart-title">Raqobatchilarning Yopilish Ehtimoli (%)</div>
+    <div style="height:280px"><canvas id="closureChart"></canvas></div>
+  </div>
+  {% endif %}
+
+  <!-- Entry Barriers -->
+  {% if block.entry_barriers %}
+  <div class="card-premium mb-4">
+    <div class="card-header-premium"><h6><i class="bi bi-shield-lock me-2 text-bank"></i>Bozorga Kirish To'siqlari</h6></div>
+    <div class="card-body-premium">
+      <div class="row g-2">
+        {% for barrier in block.entry_barriers %}
+        <div class="col-md-6">
+          <div class="d-flex align-items-start gap-2 p-3" style="background:var(--red-glass);border-radius:10px;border:1px solid rgba(220,38,38,0.2)">
+            <i class="bi bi-exclamation-triangle text-red mt-1 flex-shrink-0"></i>
+            <span class="small">{{ barrier }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Recommendation Notes -->
+  {% if block.recommendation_notes %}
+  <div class="ai-commentary mb-4">
+    <div class="fw-700 mb-2 text-bank small text-uppercase"><i class="bi bi-robot me-1"></i>Gemini Tavsiyalari</div>
+    {{ block.recommendation_notes|linebreaks }}
+  </div>
+  {% endif %}
+
+  {% include 'blocks/_evidence_panel.html' with block_evidence=block_evidence block_label='E Blok' block_icon='bi-shield-exclamation' %}
+
+  <a href="/analysis/{{ analysis.pk }}/dashboard/" class="btn btn-outline-bank">
+    <i class="bi bi-arrow-left me-1"></i>Dashboardga qaytish
+  </a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/charts.js' %}"></script>
+<script src="{% static 'js/map.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  {% if block %}
+  initLocationMap('competitor-map');
+  {% if block.competitors_1km %}
+  initClosureChart('closureChart', {{ comp_names }}, {{ comp_closure_probs }});
+  {% endif %}
+  {% endif %}
+});
+</script>
+{% endblock %}

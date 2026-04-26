@@ -1,0 +1,1481 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Yangi Tahlil — BiznesAI{% endblock %}
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<style>
+/* Tom Select Institutional Theming */
+.ts-wrapper.tomselect-multi.multi .ts-control {
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  padding: 8px 10px; min-height: 42px; background: var(--surface);
+}
+.ts-wrapper.tomselect-multi.focus .ts-control {
+  border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30, 58, 138, 0.1);
+}
+.ts-wrapper.tomselect-multi.multi .ts-control > .item {
+  background: var(--surface-3); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 2px 8px; font-weight: 500; font-size: 0.85rem; margin: 2px;
+}
+.ts-wrapper.tomselect-multi.multi .ts-control > .item .remove {
+  border-left: 1px solid var(--border); color: var(--text-muted);
+}
+.ts-dropdown { border-radius: var(--radius-sm); border: 1px solid var(--border); box-shadow: var(--shadow-md); }
+
+#map-picker {
+  height: 380px; border-radius: var(--radius);
+  border: 1px solid var(--border);
+  transition: var(--transition);
+}
+#map-picker.picked { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.05); }
+
+.wizard-step { display: none; }
+.wizard-step.active { display: block; }
+
+/* Step navigator - Minimalist */
+.step-nav { display: flex; gap: 0; margin-bottom: var(--spacing-4); padding: 0 20px; }
+.step-item { flex: 1; text-align: center; position: relative; padding-bottom: 8px; border-bottom: 3px solid var(--border); }
+.step-item.active { border-bottom-color: var(--primary); }
+.step-item.completed { border-bottom-color: var(--success); }
+.step-label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
+.step-item.active .step-label { color: var(--primary); }
+.step-item.completed .step-label { color: var(--success); }
+
+/* Category cards - Clean */
+.category-radio:checked + .cat-card {
+  border-color: var(--primary) !important;
+  background: var(--surface-2) !important;
+  outline: 2px solid var(--primary);
+}
+.cat-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: var(--transition); }
+
+/* Category detail panels */
+.category-panel {
+  border: 1px solid var(--primary); border-radius: var(--radius);
+  padding: 24px; background: var(--surface);
+  margin-top: 16px;
+}
+
+/* AI Health Banner */
+.ai-health-banner {
+  border-radius: var(--radius); padding: 12px 16px; margin-bottom: 24px;
+  display: flex; align-items: center; gap: 12px; font-size: 0.9rem;
+}
+.ai-health-banner.ok    { background: #F0FDF4; border: 1px solid #BBF7D0; color: #166534; }
+.ai-health-banner.warn  { background: #FFFBEB; border: 1px solid #FEF3C7; color: #92400E; }
+.ai-health-banner.error { background: #FEF2F2; border: 1px solid #FEE2E2; color: #991B1B; }
+
+/* Cost rows */
+.custom-cost-row {
+  display: flex; gap: 12px; align-items: center;
+  border-bottom: 1px solid var(--border); padding: 12px 0;
+}
+.btn-add-cost {
+  border: 1px dashed var(--primary); color: var(--primary);
+  background: transparent; border-radius: var(--radius-sm);
+  padding: 8px 16px; cursor: pointer; font-size: 0.9rem;
+  font-weight: 600; display: inline-flex; align-items: center; gap: 8px;
+  width: 100%; justify-content: center;
+}
+.btn-add-cost:hover { background: var(--surface-3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+  <div class="page-header mb-4">
+    <h1 class="h4 mb-1"><i class="bi bi-plus-circle me-2"></i>Yangi Biznes Tahlili</h1>
+    <p class="subtitle mb-0">AI tahlilni avtomatik boshlaydi</p>
+  </div>
+
+  <!-- ══ AI HEALTH BANNER ══════════════════════════════════════ -->
+  <div id="aiHealthBanner" class="ai-health-banner warn" style="display:none">
+    <div id="aiHealthIcon" style="font-size:1.3rem">⏳</div>
+    <div style="flex:1">
+      <div id="aiHealthTitle" class="fw-700 small" style="color:var(--text-primary)">AI xizmatlar tekshirilmoqda…</div>
+      <div id="aiProviderPills" class="d-flex flex-wrap gap-1 mt-1"></div>
+    </div>
+    <div id="aiHealthAction" style="display:none">
+      <a href="#" class="btn btn-sm btn-outline-warning" style="border-radius:8px;font-size:0.8rem"
+         onclick="document.querySelector('.navbar .dropdown-toggle').click();return false">
+        <i class="bi bi-robot me-1"></i>Model almashtirish
+      </a>
+    </div>
+  </div>
+
+  {% if form1.errors or form2.errors or form3.errors or form4.errors %}
+    <div class="alert alert-danger mb-4 border-0 shadow-sm d-flex align-items-center">
+      <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+      <div>
+        <div class="fw-700">Iltimos, xatolarni to'g'rilang:</div>
+        <ul class="mb-0 small ps-3 mt-1">
+          {% for field, errors in form1.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
+          {% for field, errors in form2.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
+          {% for field, errors in form3.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
+          {% for field, errors in form4.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Old Step Nav -->
+  <div class="step-nav mb-4">
+    <div class="step active" id="nav-step1">1. Biznes Identifikatsiyasi</div>
+    <div class="step" id="nav-step2">2. Talab va Ish Jadval</div>
+    <div class="step" id="nav-step3">3. Joylashuv va Bino</div>
+    <div class="step" id="nav-step4">4. Moliyaviy</div>
+  </div>
+
+  <form method="post" id="wizardForm" novalidate>
+    {% csrf_token %}
+
+    <!-- ══ STEP 1: Biznes Identifikatsiyasi ════════════════════ -->
+    <div class="wizard-step active" id="step1">
+      <div class="form-section">
+        <div class="form-section-title">
+          <i class="bi bi-grid me-1"></i> Biznes kategoriyasini tanlang
+        </div>
+
+        <div class="row g-3 mb-4" id="categoryCards">
+          <div class="col-6 col-md-4 col-lg-2">
+            <label class="d-block" style="cursor:pointer">
+              <input type="radio" name="{{ form1.business_category_type.html_name }}" value="hotel" id="cat_hotel" class="d-none category-radio" {% if form1.business_category_type.value == 'hotel' %}checked{% endif %}>
+              <div class="cat-card text-center" id="catcard_hotel">
+                <div style="font-size:1.2rem;margin-bottom:6px"><i class="bi bi-building"></i></div>
+                <div class="fw-700 small">Mehmonxona</div>
+              </div>
+            </label>
+          </div>
+          <div class="col-6 col-md-4 col-lg-2">
+            <label class="d-block" style="cursor:pointer">
+              <input type="radio" name="{{ form1.business_category_type.html_name }}" value="tourism" id="cat_tourism" class="d-none category-radio" {% if form1.business_category_type.value == 'tourism' %}checked{% endif %}>
+              <div class="cat-card text-center" id="catcard_tourism">
+                <div style="font-size:1.2rem;margin-bottom:6px"><i class="bi bi-airplane"></i></div>
+                <div class="fw-700 small">Turizm</div>
+              </div>
+            </label>
+          </div>
+          <div class="col-6 col-md-4 col-lg-2">
+            <label class="d-block" style="cursor:pointer">
+              <input type="radio" name="{{ form1.business_category_type.html_name }}" value="construction" id="cat_construction" class="d-none category-radio" {% if form1.business_category_type.value == 'construction' %}checked{% endif %}>
+              <div class="cat-card text-center" id="catcard_construction">
+                <div style="font-size:1.2rem;margin-bottom:6px"><i class="bi bi-hammer"></i></div>
+                <div class="fw-700 small">Qurilish</div>
+              </div>
+            </label>
+          </div>
+          <div class="col-6 col-md-4 col-lg-2">
+            <label class="d-block" style="cursor:pointer">
+              <input type="radio" name="{{ form1.business_category_type.html_name }}" value="textile" id="cat_textile" class="d-none category-radio" {% if form1.business_category_type.value == 'textile' %}checked{% endif %}>
+              <div class="cat-card text-center" id="catcard_textile">
+                <div style="font-size:1.2rem;margin-bottom:6px"><i class="bi bi-grid"></i></div>
+                <div class="fw-700 small">Tekstil</div>
+              </div>
+            </label>
+          </div>
+          <div class="col-6 col-md-4 col-lg-2">
+            <label class="d-block" style="cursor:pointer">
+              <input type="radio" name="{{ form1.business_category_type.html_name }}" value="trade" id="cat_trade" class="d-none category-radio" {% if form1.business_category_type.value == 'trade' %}checked{% endif %}>
+              <div class="cat-card text-center" id="catcard_trade">
+                <div style="font-size:1.2rem;margin-bottom:6px"><i class="bi bi-shop"></i></div>
+                <div class="fw-700 small">Savdo & Chakana</div>
+              </div>
+            </label>
+          </div>
+          <div class="col-6 col-md-4 col-lg-2">
+            <label class="d-block" style="cursor:pointer">
+              <input type="radio" name="{{ form1.business_category_type.html_name }}" value="services" id="cat_services" class="d-none category-radio" {% if form1.business_category_type.value == 'services' %}checked{% endif %}>
+              <div class="cat-card text-center" id="catcard_services">
+                <div style="font-size:1.2rem;margin-bottom:6px"><i class="bi bi-briefcase"></i></div>
+                <div class="fw-700 small">Xizmat ko'rsatish</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+      <div class="form-section mt-4">
+        <div class="form-section-title">
+          <i class="bi bi-pencil-square me-1"></i> Biznesingiz haqida yozing
+        </div>
+        <div class="mb-3">
+          {{ form1.business_description }}
+          {% if form1.business_description.errors %}<div class="text-danger small mt-1">{{ form1.business_description.errors.0 }}</div>{% endif %}
+        </div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-600">Biznes nomi</label>
+            {{ form1.business_type }}
+            {% if form1.business_type.errors %}<div class="text-danger small mt-1">{{ form1.business_type.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form1.mcc_code.label }}</label>
+            {{ form1.mcc_code }}
+            {% if form1.mcc_code.errors %}<div class="text-danger small mt-1">{{ form1.mcc_code.errors.0 }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end gap-2 mb-4">
+        <button type="button" class="btn btn-primary px-5" onclick="goStep(2)">Davom etish <i class="bi bi-arrow-right ms-2"></i></button>
+      </div>
+    </div>
+
+    <!-- ══ STEP 2: Talab va Ish Jadval ══════════════════════════ -->
+    <div class="wizard-step" id="step2">
+      <div class="form-section">
+        <div class="form-section-title">
+          <i class="bi bi-calendar-event me-1"></i> Talab va ish jadval
+        </div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">{{ form2.planned_opening_date.label }}</label>
+            {{ form2.planned_opening_date }}
+            {% if form2.planned_opening_date.errors %}<div class="text-danger small mt-1">{{ form2.planned_opening_date.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-8">
+             <label class="form-label">{{ form2.operating_hours_start.label }}</label>
+             {{ form2.operating_hours_start }}
+             {% if form2.operating_hours_start.errors %}<div class="text-danger small mt-1">{{ form2.operating_hours_start.errors.0 }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="financial-total mt-4">
+          <div class="small text-muted fw-600 mb-1">📊 Taxminiy oylik daromad</div>
+          <div class="fw-800 fs-5 text-primary" id="revenueEstimate">— so'm/oy</div>
+        </div>
+      </div>
+      <div class="d-flex justify-content-between gap-2 mb-4">
+        <button type="button" class="btn btn-outline-secondary" onclick="goStep(1)">Orqaga</button>
+        <button type="button" class="btn btn-primary px-5" onclick="goStep(3)">Davom etish <i class="bi bi-arrow-right ms-2"></i></button>
+      </div>
+    </div>
+    
+    <!-- ══ STEP 3: Joylashuv va Bino ════════════════════════════ -->
+    <div class="wizard-step" id="step3">
+      <div class="form-section">
+        <div class="form-section-title">
+          <span class="score-badge score-badge-blue">3</span>
+          <i class="bi bi-geo-alt me-1"></i> Joylashuv va bino
+        </div>
+        <p class="text-muted small mb-3"><i class="bi bi-cursor me-1"></i>Xaritada biznes ochmoqchi bo'lgan joyni bosing — tuman va manzil avtomatik aniqlanadi</p>
+        <div id="map-picker"></div>
+        {{ form3.latitude }}{{ form3.longitude }}
+        {% if form3.latitude.errors or form3.longitude.errors %}<div class="text-danger small mt-1">Xaritadan joyni belgilang</div>{% endif %}
+        <!-- District is auto-filled from map — hidden from user -->
+        <input type="hidden" name="{{ form3.district.html_name }}" id="id_s3_district" value="{{ form3.district.value|default:'' }}">
+        {% if form3.district.errors %}<div class="text-danger small mt-1">Tuman aniqlanmadi. Xaritani qayta bosing.</div>{% endif %}
+        <div id="coord-hint" class="mt-2 small text-muted"><i class="bi bi-crosshair me-1"></i>Hali joylashuv tanlanmagan</div>
+        {% if form3.latitude.errors %}<div class="text-danger small mt-1"><i class="bi bi-exclamation-triangle me-1"></i>Joylashuvni xaritadan tanlang</div>{% endif %}
+        <div class="row g-3 mt-2">
+          <!-- district field hidden; address_detail shown -->
+          <div class="col-md-12">
+            <label class="form-label fw-600">{{ form3.address_detail.label }}</label>
+            {{ form3.address_detail }}
+            <small class="text-muted" id="autoDistrictHint"></small>
+          </div>
+          <div class="col-md-4 category-conditional-field" data-hide-cats="construction textile">
+            <label class="form-label fw-600">{{ form3.location_type.label }}</label>
+            {{ form3.location_type }}
+          </div>
+          <div class="col-md-4 category-conditional-field" data-hide-cats="construction textile tourism">
+            <label class="form-label fw-600">{{ form3.foot_traffic.label }}</label>
+            {{ form3.foot_traffic }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form3.floor_area_sqm.label }}</label>
+            <div class="input-group">{{ form3.floor_area_sqm }}<span class="input-group-text">m²</span></div>
+          </div>
+          <div class="col-md-4">
+            <div class="form-check form-switch mt-4 category-conditional-field" data-hide-cats="construction">
+              {{ form3.parking_available }}
+              <label class="form-check-label ms-2">{{ form3.parking_available.label }}</label>
+            </div>
+            <div class="form-check form-switch mt-2 category-conditional-field" data-hide-cats="construction textile">
+              {{ form3.public_transport_nearby }}
+              <label class="form-check-label ms-2">{{ form3.public_transport_nearby.label }}</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-600">{{ form3.nearby_landmarks.label }}</label>
+            {{ form3.nearby_landmarks }}
+          </div>
+        </div>
+
+        <!-- ── HOTEL fields ──── -->
+        <div class="category-panel mt-4" data-cat="hotel" style="display:none">
+          <div class="form-section-title"><i class="bi bi-building me-1"></i>Mehmonxona ma'lumotlari</div>
+          <p class="small text-muted mb-2" id="routeAutofillHint">Xarita nuqtasi tanlangach aeroport va diqqatgoh masofalari avtomatik hisoblanadi.</p>
+          <div class="row g-3">
+            {% with cf=category_forms.hotel %}
+            <div class="col-md-6"><label class="form-label fw-600">{{ cf.hotel_name.label }}</label>{{ cf.hotel_name }}</div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.hotel_category.label }}</label>{{ cf.hotel_category }}</div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.total_rooms.label }}</label>{{ cf.total_rooms }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.city.label }}</label>{{ cf.city }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.room_rate_low_usd.label }}</label><div class="input-group">{{ cf.room_rate_low_usd }}<span class="input-group-text">$</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.room_rate_high_usd.label }}</label><div class="input-group">{{ cf.room_rate_high_usd }}<span class="input-group-text">$</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.tariff_system.label }}</label>{{ cf.tariff_system }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.extra_tariff_label.label }}</label>{{ cf.extra_tariff_label }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.extra_tariff_value_usd.label }}</label><div class="input-group">{{ cf.extra_tariff_value_usd }}<span class="input-group-text">$</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.target_occupancy_pct.label }}</label><div class="input-group">{{ cf.target_occupancy_pct }}<span class="input-group-text">%</span></div></div>
+            <div class="col-md-4"><div class="form-check form-switch mt-4">{{ cf.applying_for_subsidy }}<label class="form-check-label ms-2">{{ cf.applying_for_subsidy.label }}</label></div></div>
+            <div class="col-md-4"><div class="form-check form-switch mt-4">{{ cf.franchise_agreement }}<label class="form-check-label ms-2">{{ cf.franchise_agreement.label }}</label></div></div>
+            {% endwith %}
+          </div>
+        </div>
+
+        <!-- ── TOURISM fields (shares hotel panel) ──── -->
+        <div class="category-panel mt-4" data-cat="tourism" style="display:none">
+          <div class="form-section-title"><i class="bi bi-airplane me-1"></i>Turizm xizmati ma'lumotlari</div>
+          <p class="small text-muted mb-3">Sayohat agentligi, tur operatori yoki dam olish maskani uchun.</p>
+          <div class="row g-3">
+            {% with cf=category_forms.hotel %}
+            <div class="col-md-6"><label class="form-label fw-600">Xizmat nomi</label>{{ cf.hotel_name }}</div>
+            <div class="col-md-3"><label class="form-label fw-600">Tur turi</label>{{ cf.hotel_category }}</div>
+            <div class="col-md-3"><label class="form-label fw-600">Sig'im / Xonalar</label>{{ cf.total_rooms }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">Shahar</label>{{ cf.city }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.distance_to_airport_km.label }}</label><div class="input-group">{{ cf.distance_to_airport_km }}<span class="input-group-text">km</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.distance_to_top_attraction_km.label }}</label><div class="input-group">{{ cf.distance_to_top_attraction_km }}<span class="input-group-text">km</span></div></div>
+            <div class="col-md-6"><label class="form-label fw-600">{{ cf.nearest_attraction_name.label }}</label>{{ cf.nearest_attraction_name }}</div>
+            <div class="col-md-3"><label class="form-label fw-600">Quyi sezon narxi (USD)</label><div class="input-group">{{ cf.room_rate_low_usd }}<span class="input-group-text">$</span></div></div>
+            <div class="col-md-3"><label class="form-label fw-600">Yuqori sezon narxi (USD)</label><div class="input-group">{{ cf.room_rate_high_usd }}<span class="input-group-text">$</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.target_occupancy_pct.label }}</label><div class="input-group">{{ cf.target_occupancy_pct }}<span class="input-group-text">%</span></div></div>
+            <div class="col-md-4"><div class="form-check form-switch mt-4">{{ cf.applying_for_subsidy }}<label class="form-check-label ms-2">{{ cf.applying_for_subsidy.label }}</label></div></div>
+            <div class="col-md-4"><div class="form-check form-switch mt-4">{{ cf.franchise_agreement }}<label class="form-check-label ms-2">Xalqaro brend / franchayzi</label></div></div>
+            {% endwith %}
+          </div>
+        </div>
+
+        <!-- ── CONSTRUCTION fields ──── -->
+        <div class="category-panel mt-4" data-cat="construction" style="display:none">
+          <div class="form-section-title"><i class="bi bi-tools me-1"></i>Qurilish ma'lumotlari</div>
+          <div class="row g-3">
+            {% with cf=category_forms.construction %}
+            <div class="col-md-3"><div class="form-check form-switch mt-2">{{ cf.has_license }}<label class="form-check-label ms-2">{{ cf.has_license.label }}</label></div></div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.license_category.label }}</label>{{ cf.license_category }}</div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.months_to_get_license.label }}</label><div class="input-group">{{ cf.months_to_get_license }}<span class="input-group-text">oy</span></div></div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.months_to_first_income.label }}</label><div class="input-group">{{ cf.months_to_first_income }}<span class="input-group-text">oy</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.expected_first_contract_size_uzs.label }}</label><div class="input-group">{{ cf.expected_first_contract_size_uzs }}<span class="input-group-text">UZS</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.average_project_duration_months.label }}</label><div class="input-group">{{ cf.average_project_duration_months }}<span class="input-group-text">oy</span></div></div>
+            <div class="col-md-2"><label class="form-label fw-600">{{ cf.num_engineers.label }}</label>{{ cf.num_engineers }}</div>
+            <div class="col-md-2"><label class="form-label fw-600">{{ cf.num_workers.label }}</label>{{ cf.num_workers }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.average_margin_pct.label }}</label><div class="input-group">{{ cf.average_margin_pct }}<span class="input-group-text">%</span></div></div>
+            <div class="col-md-4"><div class="form-check form-switch mt-4">{{ cf.subcontractor_network }}<label class="form-check-label ms-2">{{ cf.subcontractor_network.label }}</label></div></div>
+            <div class="col-12"><label class="form-label fw-600">{{ cf.current_contracts.label }}</label>{{ cf.current_contracts }}</div>
+            {% endwith %}
+          </div>
+        </div>
+
+        <!-- ── TEXTILE fields ──── -->
+        <div class="category-panel mt-4" data-cat="textile" style="display:none">
+          <div class="form-section-title"><i class="bi bi-scissors me-1"></i>Tekstil ma'lumotlari</div>
+          <div class="row g-3">
+            {% with cf=category_forms.textile %}
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.production_capacity_monthly.label }}</label>{{ cf.production_capacity_monthly }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.unit_of_measure.label }}</label>{{ cf.unit_of_measure }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.raw_material_monthly_uzs.label }}</label><div class="input-group">{{ cf.raw_material_monthly_uzs }}<span class="input-group-text">UZS</span></div></div>
+            <div class="col-md-3"><div class="form-check form-switch mt-2">{{ cf.export_experience }}<label class="form-check-label ms-2">{{ cf.export_experience.label }}</label></div></div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.months_to_get_cert.label }}</label><div class="input-group">{{ cf.months_to_get_cert }}<span class="input-group-text">oy</span></div></div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.machinery_age_years.label }}</label><div class="input-group">{{ cf.machinery_age_years }}<span class="input-group-text">yil</span></div></div>
+            <div class="col-md-3"><label class="form-label fw-600">{{ cf.num_workers_skilled.label }}</label>{{ cf.num_workers_skilled }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.electricity_monthly.label }}</label><div class="input-group">{{ cf.electricity_monthly }}<span class="input-group-text">UZS</span></div></div>
+            <div class="col-12"><label class="form-label fw-600">{{ cf.existing_buyers.label }}</label>{{ cf.existing_buyers }}</div>
+            {% endwith %}
+          </div>
+        </div>
+
+        <!-- ── TRADE fields ──── -->
+        <div class="category-panel mt-4" data-cat="trade" style="display:none">
+          <div class="form-section-title"><i class="bi bi-shop me-1"></i>Savdo ma'lumotlari</div>
+          <div class="row g-3">
+            {% with cf=category_forms.trade %}
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.trade_type.label }}</label>{{ cf.trade_type }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.store_format.label }}</label>{{ cf.store_format }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.avg_monthly_stock_uzs.label }}</label><div class="input-group">{{ cf.avg_monthly_stock_uzs }}<span class="input-group-text">UZS</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.avg_markup_pct.label }}</label><div class="input-group">{{ cf.avg_markup_pct }}<span class="input-group-text">%</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.price_strategy.label }}</label>{{ cf.price_strategy }}</div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.inventory_turnover_days.label }}</label><div class="input-group">{{ cf.inventory_turnover_days }}<span class="input-group-text">kun</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.supplier_credit_days.label }}</label><div class="input-group">{{ cf.supplier_credit_days }}<span class="input-group-text">kun</span></div></div>
+            <div class="col-md-4"><label class="form-label fw-600">{{ cf.direct_competitors_300m.label }}</label>{{ cf.direct_competitors_300m }}</div>
+            {% endwith %}
+          </div>
+        </div>
+
+        <!-- ── SERVICES fields ──── -->
+        <div class="category-panel mt-4" data-cat="services" style="display:none">
+          <div class="form-section-title"><i class="bi bi-briefcase me-1"></i>Xizmat ko'rsatish ma'lumotlari</div>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-600">Xizmat turi</label>
+              <select name="cat-service_type" class="form-select">
+                <option value="beauty">Go'zallik / Sartaroshxona</option>
+                <option value="medical">Tibbiy / Klinika</option>
+                <option value="education">Ta'lim / Kurs</option>
+                <option value="it">IT / Dasturlash</option>
+                <option value="repair">Ta'mirlash / Ustaxona</option>
+                <option value="logistics">Logistika / Yetkazib berish</option>
+                <option value="cleaning">Tozalash xizmatlari</option>
+                <option value="other">Boshqa xizmat</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Litsenziya talab qilinadi</label>
+              <select name="cat-service_license_required" class="form-select">
+                <option value="no">Yo'q</option>
+                <option value="yes">Ha (Litsenziyali)</option>
+                <option value="pending">Jarayonda</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Mutaxassis soni</label>
+              <input type="number" name="cat-service_specialists" class="form-control" min="1" placeholder="2" value="2">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Xizmat sig'imi (kun/oy)</label>
+              <div class="input-group">
+                <input type="number" name="cat-service_capacity_monthly" class="form-control" min="1" placeholder="200">
+                <span class="input-group-text">dona/oy</span>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">Takroriy mijozlar ulushi</label>
+              <div class="input-group">
+                <input type="number" name="cat-service_repeat_pct" class="form-control" min="0" max="100" placeholder="40">
+                <span class="input-group-text">%</span>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-600">O'rtacha xizmat bahosi (UZS)</label>
+              <div class="input-group">
+                <input type="number" name="cat-service_avg_price" class="form-control" min="0" placeholder="150000">
+                <span class="input-group-text">UZS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="d-flex justify-content-between gap-2 mb-4">
+        <button type="button" class="btn btn-outline-bank" onclick="goStep(2)"><i class="bi bi-arrow-left me-1"></i>Orqaga</button>
+        <button type="button" class="btn btn-bank px-5" onclick="goStep(4)">Davom etish <i class="bi bi-arrow-right ms-2"></i></button>
+      </div>
+    </div>
+
+    <!-- ══ STEP 4: Moliyaviy ════════════════════════════════════ -->
+    <div class="wizard-step" id="step4">
+      <div class="form-section">
+        <div class="form-section-title">
+          <span class="score-badge score-badge-blue">4</span>
+          <i class="bi bi-cash-coin me-1"></i> Moliyaviy ma'lumotlar
+        </div>
+
+        <h6 class="fw-700 text-bank mb-3 mt-1"><i class="bi bi-piggy-bank me-1"></i>Kapital tuzilmasi va SQB Kredit Mahsuloti</h6>
+        <div class="row g-3 mb-4">
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form4.sqb_credit_product.label }}</label>
+            {{ form4.sqb_credit_product }}
+            {% if form4.sqb_credit_product.errors %}<div class="text-danger small mt-1">{{ form4.sqb_credit_product.errors.0 }}</div>{% endif %}
+            <small class="text-muted"><i class="bi bi-info-circle me-1"></i>SQB rasmiy sayti asosida onlayn kreditlar yoki ishonchli loyiha kreditini tanlang.</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form4.investment_amount.label }}</label>
+            <div class="input-group">
+              {{ form4.investment_amount }}
+              <span class="input-group-text">UZS</span>
+            </div>
+            {% if form4.investment_amount.errors %}<div class="text-danger small mt-1">{{ form4.investment_amount.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form4.target_monthly_revenue.label }}</label>
+            <div class="input-group">
+              {{ form4.target_monthly_revenue }}
+              <span class="input-group-text">UZS</span>
+            </div>
+            {% if form4.target_monthly_revenue.errors %}<div class="text-danger small mt-1">{{ form4.target_monthly_revenue.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form4.loan_amount.label }}</label>
+            <div class="input-group">
+              {{ form4.loan_amount }}
+              <span class="input-group-text">UZS</span>
+            </div>
+            {% if form4.loan_amount.errors %}<div class="text-danger small mt-1">{{ form4.loan_amount.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form4.zalog_id.label }}</label>
+            {{ form4.zalog_id }}
+            <div id="zalogHint" class="small text-muted mt-1"></div>
+            {% if form4.zalog_id.errors %}<div class="text-danger small mt-1">{{ form4.zalog_id.errors.0 }}</div>{% endif %}
+          </div>
+        </div>
+
+        <h6 class="fw-700 text-bank mb-3"><i class="bi bi-receipt me-1"></i>Oylik asosiy xarajatlar</h6>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form4.monthly_rent_uzs.label }}</label>
+            <div class="input-group">
+              {{ form4.monthly_rent_uzs }}
+              <span class="input-group-text">UZS</span>
+            </div>
+            {% if form4.monthly_rent_uzs.errors %}<div class="text-danger small mt-1">{{ form4.monthly_rent_uzs.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form4.monthly_salary_budget.label }}</label>
+            <div class="input-group">
+              {{ form4.monthly_salary_budget }}
+              <span class="input-group-text">UZS</span>
+            </div>
+            {% if form4.monthly_salary_budget.errors %}<div class="text-danger small mt-1">{{ form4.monthly_salary_budget.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form4.monthly_utilities.label }}</label>
+            <div class="input-group">
+              {{ form4.monthly_utilities }}
+              <span class="input-group-text">UZS</span>
+            </div>
+            {% if form4.monthly_utilities.errors %}<div class="text-danger small mt-1">{{ form4.monthly_utilities.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form4.num_employees.label }}</label>
+            {{ form4.num_employees }}
+            {% if form4.num_employees.errors %}<div class="text-danger small mt-1">{{ form4.num_employees.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-4 category-conditional-field" data-hide-cats="hotel tourism">
+            <label class="form-label fw-600">{{ form4.cogs_percentage.label }}</label>
+            <div class="input-group">
+              {{ form4.cogs_percentage }}
+              <span class="input-group-text">%</span>
+            </div>
+            {% if form4.cogs_percentage.errors %}<div class="text-danger small mt-1">{{ form4.cogs_percentage.errors.0 }}</div>{% endif %}
+          </div>
+        </div>
+
+        <!-- Category-specific standard extras -->
+        <div class="row g-3 mb-3" id="standardExtrasRow">
+          <div class="col-md-4 extra-cost-field" data-cost-cats="trade hotel tourism services">
+            <label class="form-label fw-600">{{ form4.monthly_marketing_uzs.label }}</label>
+            <div class="input-group">{{ form4.monthly_marketing_uzs }}<span class="input-group-text">UZS</span></div>
+          </div>
+          <div class="col-md-4 extra-cost-field" data-cost-cats="trade construction textile">
+            <label class="form-label fw-600">{{ form4.monthly_logistics_uzs.label }}</label>
+            <div class="input-group">{{ form4.monthly_logistics_uzs }}<span class="input-group-text">UZS</span></div>
+          </div>
+          <div class="col-md-4 extra-cost-field" data-cost-cats="hotel tourism construction textile services">
+            <label class="form-label fw-600">{{ form4.monthly_maintenance_uzs.label }}</label>
+            <div class="input-group">{{ form4.monthly_maintenance_uzs }}<span class="input-group-text">UZS</span></div>
+          </div>
+          <div class="col-md-4 extra-cost-field" data-cost-cats="trade hotel tourism services">
+            <label class="form-label fw-600">{{ form4.monthly_software_uzs.label }}</label>
+            <div class="input-group">{{ form4.monthly_software_uzs }}<span class="input-group-text">UZS</span></div>
+          </div>
+          <div class="col-md-4 extra-cost-field" data-cost-cats="trade hotel tourism construction textile services">
+            <label class="form-label fw-600">{{ form4.monthly_security_uzs.label }}</label>
+            <div class="input-group">{{ form4.monthly_security_uzs }}<span class="input-group-text">UZS</span></div>
+          </div>
+        </div>
+
+        <!-- Dynamic custom cost rows -->
+        <h6 class="fw-700 text-bank mb-2 mt-2"><i class="bi bi-plus-circle me-1"></i>Qo'shimcha xarajatlar</h6>
+        <div id="customCostRows"></div>
+        <button type="button" class="btn-add-cost mt-1" id="addCostBtn">
+          <i class="bi bi-plus-lg"></i> Yangi xarajat qo'shish
+        </button>
+        <input type="hidden" name="{{ form4.extra_costs_json.html_name }}" id="id_extra_costs_json" value="[]">
+
+        <div class="row g-3 mt-3">
+          <div class="col-md-4">
+            <label class="form-label fw-600">{{ form4.desired_payback_months.label }}</label>
+            <div class="input-group">{{ form4.desired_payback_months }}<span class="input-group-text">oy</span></div>
+          </div>
+        </div>
+
+        <div class="financial-total mt-4">
+          <div class="small text-muted fw-600 mb-1">💸 Oylik doimiy xarajatlar (avtomatik hisob):</div>
+          <div class="fw-800 fs-5 text-bank" id="fixedCostTotal">0 UZS</div>
+          <small class="text-muted">= Ijara + ish haqi + kommunal + soha xarajatlari + qo'shimcha</small>
+        </div>
+
+        <!-- Raqobat -->
+        <h6 class="fw-700 text-bank mb-3 mt-4"><i class="bi bi-people me-1"></i>Raqobat</h6>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form4.known_competitors.label }}</label>
+            {{ form4.known_competitors }}
+            <small class="text-muted d-block mt-1" id="competitorAutoHint">Joylashuv tanlangach atrofdagi raqobatchilar avtomatik yoziladi.</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600">{{ form4.competitor_advantage.label }}</label>
+            {{ form4.competitor_advantage }}
+          </div>
+        </div>
+
+        <!-- ── Bank-specific fields per category ───────────────── -->
+      <div class="form-section-title d-flex align-items-center gap-3 mb-4">
+        <div class="brand-logo bg-primary" style="width:48px;height:48px"><i class="bi bi-bank fs-4"></i></div>
+        <div>
+          <h5 class="mb-0 fw-800">Bank uchun qo'shimcha ma'lumotlar</h5>
+          <p class="small text-muted mb-0">SQB kredit ko'rib chiqishida kerak bo'ladigan kategoriya-spesifik ma'lumotlar.</p>
+        </div>
+      </div>
+
+          <!-- HOTEL / TOURISM bank fields -->
+          <div class="bank-fields-section" id="bankFields_hotel" style="display:none">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-600">Booking.com / Airbnb profili</label>
+                {{ category_forms.hotel.booking_profile }}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-600">Oldindan bron ulushi (%)</label>
+                <div class="input-group">
+                  {{ category_forms.hotel.advance_booking_pct }}
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-600">Garov turi</label>
+                {{ category_forms.hotel.collateral_type }}
+              </div>
+            </div>
+          </div>
+
+          <!-- CONSTRUCTION bank fields -->
+          <div class="bank-fields-section" id="bankFields_construction" style="display:none">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-600">Loyiha turi</label>
+                {{ category_forms.construction.project_type }}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-600">Uskunalar ulushi (%)</label>
+                <div class="input-group">
+                  {{ category_forms.construction.equipment_pct }}
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4 d-flex align-items-center">
+                <div class="form-check">
+                  {{ category_forms.construction.license_valid }}
+                  <label class="form-check-label fw-600 ms-2">Litsenziya muddati o'tmagan</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TEXTILE bank fields -->
+          <div class="bank-fields-section" id="bankFields_textile" style="display:none">
+            <div class="row g-3">
+              <div class="col-md-3">
+                <label class="form-label fw-600">Eksport ulushi (%)</label>
+                <div class="input-group">
+                  {{ category_forms.textile.export_pct }}
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-600">Asosiy bozor</label>
+                {{ category_forms.textile.market_type }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-600">Sertifikat turi</label>
+                {{ category_forms.textile.cert_type }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label fw-600">Fabrika maydoni (m²)</label>
+                <div class="input-group">
+                  {{ category_forms.textile.factory_sqm }}
+                  <span class="input-group-text">m²</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TRADE bank fields -->
+          <div class="bank-fields-section" id="bankFields_trade" style="display:none">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-600">Etkazib beruvchilar soni</label>
+                {{ category_forms.trade.suppliers_count }}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-600">Kredit liniyasi ehtiyoji (UZS)</label>
+                <div class="input-group">
+                <div class="input-group">
+                  <input type="number" name="bank_trade_fast_moving_pct" class="form-control" min="0" max="100" placeholder="60">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SERVICES bank fields -->
+          <div class="bank-fields-section" id="bankFields_services" style="display:none">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label fw-600">Litsenziya turi</label>
+                <select name="bank_service_license_type" class="form-select">
+                  <option value="none">Talab qilinmaydi</option>
+                  <option value="medical">Tibbiy litsenziya</option>
+                  <option value="education">Ta'lim litsenziyasi</option>
+                  <option value="financial">Moliyaviy litsenziya</option>
+                  <option value="other">Boshqa</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-600">Maxsus jihozlar qiymati (UZS)</label>
+                <div class="input-group">
+                  <input type="number" name="bank_service_equipment_uzs" class="form-control" min="0" placeholder="10000000">
+                  <span class="input-group-text">UZS</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-600">Takroriy mijozlar ulushi</label>
+                <div class="input-group">
+                  <input type="number" name="bank_service_repeat_pct" class="form-control" min="0" max="100" placeholder="40">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /bankFieldsSection -->
+
+      </div>
+
+      <div class="d-flex justify-content-between gap-2 mb-5">
+        <button type="button" class="btn btn-outline-bank" onclick="goStep(4)"><i class="bi bi-arrow-left me-1"></i>Orqaga</button>
+        <button type="submit" class="btn btn-bank px-5" id="submitBtn">
+          <i class="bi bi-cpu me-2"></i>AI Tahlilni Boshlash
+        </button>
+      </div>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+var targetCustomerTomSelect = null;
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('select.tomselect-multi').forEach(el => {
+    const instance = new TomSelect(el, {
+      plugins: ['remove_button', 'clear_button'],
+      placeholder: el.getAttribute('placeholder') || 'Tanlang...',
+      maxItems: 6, hideSelected: true, closeAfterSelect: false,
+      render: { no_results: () => '<div class="p-2 text-muted small">Topilmadi</div>' },
+    });
+    if (el.name.endsWith('target_customer')) {
+      targetCustomerTomSelect = instance;
+      if (typeof applyTargetCustomers === 'function') applyTargetCustomers();
+    }
+  });
+});
+</script>
+
+<script src="{% static 'js/map.js' %}"></script>
+<script>
+// ── Step navigation ──────────────────────────────────────────
+const TOTAL = 4;
+let currentStep = 1;
+
+function goStep(n) {
+    if (n > currentStep) {
+    if (currentStep === 3) {
+      const mapPicker = document.getElementById('map-picker');
+      const coordHint = document.getElementById('coord-hint');
+      if (mapPicker && !mapPicker.classList.contains('picked')) {
+        if (coordHint) {
+          coordHint.innerHTML = '<i class="bi bi-exclamation-triangle me-1 text-danger"></i>Iltimos, xaritadan joylashuvni tanlang';
+          coordHint.classList.remove('text-muted'); coordHint.classList.add('text-danger');
+        }
+        if (typeof refreshMapPicker === 'function') refreshMapPicker('map-picker');
+        return;
+      }
+    }
+    const currentStepEl = document.getElementById(`step${currentStep}`);
+    const inputs = currentStepEl.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
+    for (let input of inputs) {
+      const parentPanel = input.closest('.category-panel');
+      if (parentPanel && parentPanel.style.display === 'none') continue;
+      if (!input.checkValidity()) { input.reportValidity(); return; }
+    }
+  }
+  document.querySelector(`#step${currentStep}`).classList.remove('active');
+  document.querySelector(`#nav-step${currentStep}`).classList.remove('active');
+  currentStep = n;
+  document.querySelector(`#step${n}`).classList.add('active');
+  document.querySelectorAll('.step').forEach((el, i) => {
+    const sn = i + 1;
+    el.classList.remove('active', 'completed');
+    if (sn === n) {
+      el.classList.add('active');
+    } else if (sn < n) {
+      el.classList.add('completed');
+    }
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (n === 3 && typeof refreshMapPicker === 'function') refreshMapPicker('map-picker');
+  if (typeof saveDraft === 'function') saveDraft();
+}
+
+// ── Char counter ─────────────────────────────────────────────
+const textarea = document.getElementById('id_business_description') ||
+                 document.querySelector('textarea[name$="business_description"]');
+if (textarea) {
+  const fill = document.getElementById('charFill');
+  const count = document.getElementById('charCount');
+  textarea.addEventListener('input', () => {
+    const n = textarea.value.length;
+    count.textContent = n + ' belgi';
+    const pct = Math.min(100, (n / 300) * 100);
+    fill.style.width = pct + '%';
+    fill.style.background = n >= 200 ? 'var(--green)' : n >= 100 ? 'var(--amber)' : 'var(--red)';
+  });
+}
+
+// ── Revenue estimate (Step 2) ─────────────────────────────────
+function updateRevenue() {
+  const cat = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  const customers = parseInt(document.querySelector('[name$="expected_daily_customers"]')?.value) || 0;
+  const check = parseFloat(document.querySelector('[name$="average_check_uzs"]')?.value) || 0;
+  const days = parseInt(document.querySelector('[name$="working_days_per_week"]')?.value) || 7;
+  const monthly = customers * check * days * 4.3;
+  const el = document.getElementById('revenueEstimate');
+  if (el) el.textContent = monthly > 0 ? monthly.toLocaleString('uz') + ' so\'m/oy' : '—';
+}
+
+// ── Fixed cost total (Step 4) ─────────────────────────────────
+function updateFixedTotal() {
+  const rent     = parseFloat(document.querySelector('[name$="monthly_rent_uzs"]')?.value) || 0;
+  const salary   = parseFloat(document.querySelector('[name$="monthly_salary_budget"]')?.value) || 0;
+  const utils    = parseFloat(document.querySelector('[name$="monthly_utilities"]')?.value) || 0;
+  const extras   = Array.from(document.querySelectorAll('.extra-cost:not(:disabled)'))
+                     .reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+  const customs  = Array.from(document.querySelectorAll('.custom-cost-amount'))
+                     .reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+  const total = rent + salary + utils + extras + customs;
+  const el = document.getElementById('fixedCostTotal');
+  if (el) el.textContent = total.toLocaleString('uz') + ' UZS';
+  serializeCustomCosts();
+}
+document.addEventListener('input', e => { updateRevenue(); updateFixedTotal(); });
+
+// ── 24/7 toggle ──────────────────────────────────────────────
+const is247Check = document.getElementById('id_is_24_7');
+const opStart = document.getElementById('id_op_start');
+const opEnd   = document.getElementById('id_op_end');
+if (is247Check && opStart && opEnd) {
+  function toggleOpHours() {
+    if (is247Check.checked) {
+      opStart.disabled = true; opEnd.disabled = true;
+      opStart.value = '00:00'; opEnd.value = '23:59';
+      document.querySelectorAll('.op-time-col').forEach(el => el.style.display = 'none');
+      const workingDays = document.querySelector('[name$="working_days_per_week"]');
+      if (workingDays) {
+          workingDays.value = 7;
+          workingDays.closest('div').style.display = 'none';
+      }
+    } else {
+      opStart.disabled = false; opEnd.disabled = false;
+      if (opStart.value === '00:00') opStart.value = '09:00';
+      if (opEnd.value === '23:59') opEnd.value = '21:00';
+      document.querySelectorAll('.op-time-col').forEach(el => el.style.display = '');
+      const workingDays = document.querySelector('[name$="working_days_per_week"]');
+      if (workingDays) {
+          workingDays.closest('div').style.display = '';
+      }
+    }
+  }
+  is247Check.addEventListener('change', toggleOpHours);
+  toggleOpHours();
+}
+
+// ── Seasonal notes toggle ─────────────────────────────────────
+const seasonalCheck = document.querySelector('[name$="has_seasonal_dependency"]');
+const seasonalBox   = document.getElementById('seasonalNotesBox');
+if (seasonalCheck && seasonalBox) {
+  seasonalCheck.addEventListener('change', () => {
+    seasonalBox.style.display = seasonalCheck.checked ? 'block' : 'none';
+  });
+}
+
+// ── Category data lookup tables ───────────────────────────────
+const CATEGORY_LABELS = {
+  hotel:        'Mehmonxona',
+  tourism:      'Turizm',
+  construction: 'Qurilish',
+  textile:      'Tekstil',
+  trade:        'Savdo & Chakana',
+  services:     "Xizmat ko'rsatish",
+};
+
+const MCC_BY_CATEGORY = {
+  hotel:        ['7011','7012','5812'],
+  tourism:      ['4722','7991','7011','5812'],
+  construction: ['5251','5065','5039','7389'],
+  textile:      ['5661','5131','5137','5699'],
+  trade:        ['5411','5912','5200','5310','5945','5661','5999'],
+  services:     ['7299','8099','8011','7372','8049','5812','5999'],
+};
+const MCC_LABELS = {
+  '7011': 'Mehmonxona / Hotel',
+  '7012': 'Apart-hotel / Vaqtinchalik yashash',
+  '4722': 'Sayohat agentligi / Tur operator',
+  '7991': 'Dam olish maskani / Attraktsion',
+  '5812': 'Restoran / Kafe',
+  '5251': "Qurilish mollari do'koni",
+  '5065': 'Elektr materiallari va jihozlar',
+  '5039': "Qurilish xom-ashyo",
+  '7389': "Qurilish pudrat va ta'mirlash",
+  '5661': "Kiyim-kechak do'koni / Chakana",
+  '5131': "To'qimachilik va mato — ulgurji",
+  '5137': 'Forma va maxsus kiyimlar',
+  '5699': 'Kiyim-kechak (boshqa)',
+  '5411': "Oziq-ovqat do'koni / Supermarket",
+  '5912': 'Dorixona / Apteka',
+  '5200': "Uy jihozlari / Mebel do'koni",
+  '5310': "Chegirmali / Universal do'kon",
+  '5945': "O'yinchoq / Hobby do'koni",
+  '7299': "Maishiy xizmatlar (go'zallik, sartaroshxona)",
+  '8099': "Tibbiy va sog'liqni saqlash",
+  '8011': 'Shifokorlar / Klinikalar',
+  '7372': "IT va dasturiy ta'minot",
+  '8049': 'Stomatologiya',
+  '5999': 'Boshqa / Umumiy',
+};
+const MCC_HINTS = {
+  '7011': 'SQB mehmonxona kreditlash dasturi orqali 5.6% subsidiya mumkin (VM 550/2024)',
+  '4722': 'Turizm operatori litsenziyasi (TSTY) talab qilinadi',
+  '5251': "Qurilish litsenziyasi (1-3 toifa) — Vazirlik yo'riqnomasi asosida",
+  '7389': "Pudrat shartnomasi va kafillik talab qilinadi",
+  '5411': "Oziq-ovqat savdosi uchun SES ruxsatnomasi majburiy",
+  '5912': "Dorixona — Sog'liqni saqlash vazirligi litsenziyasi",
+  '8099': "Tibbiy faoliyat litsenziyasi majburiy (SV #05)",
+  '7299': "Sanitariya nazorati sertifikati talab etiladi",
+};
+
+// Step 2 category-specific labels
+const STEP2_CONFIG = {
+  hotel:    { customersLabel: 'Kunlik xonalar bron soni',    customersUnit: 'xona/kun', checkLabel: "O'rtacha xona narxi (UZS)", checkUnit: 'UZS', hint: 'Mehmonxona uchun: bandlik & xona narxini kiriting. Oylik daromad = Bron×Narx×Kunlar asosida hisoblanadi.' },
+  tourism:  { customersLabel: 'Kunlik sayyohlar / guruhlar', customersUnit: 'guruh/kun', checkLabel: "O'rtacha tur narxi (UZS)", checkUnit: 'UZS', hint: "Turizm xizmati: kunlik guruh soni va o'rtacha tur paketining narxini kiriting." },
+  construction: { customersLabel: 'Oylik kontrakt soni (taxminiy)', customersUnit: 'ta/oy', checkLabel: "O'rtacha kontrakt qiymati (UZS)", checkUnit: 'UZS', hint: "Qurilish kompaniyasi: oylik kontrakt soni va o'rtacha kontrakt hajmini kiriting (oy hisobida bo'lsa ham)." },
+  textile:  { customersLabel: 'Oylik buyurtmalar soni', customersUnit: 'dona/oy', checkLabel: "O'rtacha buyurtma qiymati (UZS)", checkUnit: 'UZS', hint: "Tekstil ishlab chiqarish: oylik buyurtmalar soni va bir buyurtmaning o'rtacha qiymatini kiriting." },
+  trade:    { customersLabel: 'Kunlik mijozlar soni', customersUnit: 'kishi/kun', checkLabel: "O'rtacha chek (UZS)", checkUnit: 'UZS', hint: "Savdo do'koni: kunlik tashrif buyuruvchilar va bitta xaridning o'rtacha qiymatini kiriting." },
+  services: { customersLabel: 'Kunlik xizmatlar soni', customersUnit: 'dona/kun', checkLabel: "O'rtacha xizmat narxi (UZS)", checkUnit: 'UZS', hint: "Xizmat ko'rsatish: kunlik bajarilgan xizmatlar soni va bitta xizmat narxini kiriting." },
+};
+
+const TARGET_CUSTOMERS_BY_CATEGORY = {
+  hotel:        ['local_tourists','foreign_tourists','business_travelers','pilgrims'],
+  tourism:      ['local_tourists','foreign_tourists','pilgrims','business_travelers','families'],
+  construction: ['b2b_companies','gov_contracts','individuals'],
+  textile:      ['wholesale_buyers','retail_shops','foreign_importers','b2b_companies'],
+  trade:        ['all','families','students','office_workers','local_residents','wholesale_buyers','retail_shops'],
+  services:     ['local_residents','families','office_workers','professionals','busy_households','small_businesses'],
+};
+const TARGET_CUSTOMER_LABELS = {
+  all: 'Barcha (Keng ommaga)', families: 'Oilalar', students: 'Talabalar / Yoshlar',
+  office_workers: 'Ofis xodimlari', local_residents: 'Mahalliy aholi', professionals: 'Mutaxassislar',
+  busy_households: "Band oilalar", small_businesses: 'Kichik biznes egalari',
+  foreign_tourists: 'Xorijiy sayyohlar', local_tourists: 'Mahalliy sayyohlar',
+  business_travelers: 'Biznes sayohatdagilar', pilgrims: 'Ziyoratchilar',
+  b2b_companies: 'B2B kompaniyalar', gov_contracts: 'Davlat tashkilotlari',
+  individuals: 'Jismoniy shaxslar', wholesale_buyers: 'Ulgurji xaridorlar',
+  retail_shops: "Chakana do'konlar", foreign_importers: 'Xorijiy importyorlar',
+};
+
+function applyTargetCustomers() {
+  const cat = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  const allowed = TARGET_CUSTOMERS_BY_CATEGORY[cat] || [];
+  const allowedSet = new Set(allowed);
+  const nativeSelect = document.querySelector('select[name$="target_customer"]');
+  if (targetCustomerTomSelect) {
+    const selected = targetCustomerTomSelect.items.filter(v => allowedSet.has(v));
+    targetCustomerTomSelect.clear(true); targetCustomerTomSelect.clearOptions();
+    allowed.forEach(v => targetCustomerTomSelect.addOption({ value: v, text: TARGET_CUSTOMER_LABELS[v] || v }));
+    selected.forEach(v => targetCustomerTomSelect.addItem(v, true));
+    targetCustomerTomSelect.refreshOptions(false);
+    return;
+  }
+  if (nativeSelect) {
+    const sel = Array.from(nativeSelect.selectedOptions).map(o => o.value).filter(v => allowedSet.has(v));
+    nativeSelect.innerHTML = '';
+    allowed.forEach(v => {
+      const o = new Option(TARGET_CUSTOMER_LABELS[v] || v, v);
+      o.selected = sel.includes(v); nativeSelect.add(o);
+    });
+  }
+}
+
+function applyMccOptions() {
+  const cat = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  const allowed = MCC_BY_CATEGORY[cat] || Object.keys(MCC_LABELS);
+  const sel = document.querySelector('select[name$="mcc_code"]');
+  if (!sel) return;
+  const curr = sel.value;
+  sel.innerHTML = '';
+  allowed.forEach(v => {
+    const o = new Option(MCC_LABELS[v] || v, v);
+    o.selected = v === curr; sel.add(o);
+  });
+  if (!allowed.includes(curr)) sel.value = allowed[0] || '';
+  // Show hint for selected MCC
+  const hint = document.getElementById('mccHint');
+  if (hint) hint.textContent = MCC_HINTS[sel.value] || '';
+  sel.addEventListener('change', () => { if (hint) hint.textContent = MCC_HINTS[sel.value] || ''; });
+}
+
+function applyStep2Config() {
+  const cat = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  const cfg = STEP2_CONFIG[cat] || STEP2_CONFIG.trade;
+  const custLabel = document.getElementById('dailyCustomersLabel');
+  const custUnit  = document.getElementById('dailyCustomersUnit');
+  const custHint  = document.getElementById('dailyCustomersHint');
+  const checkLabel = document.getElementById('avgCheckLabel');
+  const checkUnit  = document.getElementById('avgCheckUnit');
+  const hintEl     = document.getElementById('step2HintText');
+  const revLabel   = document.getElementById('revenueEstimateLabel');
+  if (custLabel)  custLabel.textContent = cfg.customersLabel;
+  if (custUnit)   custUnit.textContent  = cfg.customersUnit;
+  if (custHint)   custHint.textContent  = '';
+  if (checkLabel) checkLabel.textContent = cfg.checkLabel;
+  if (checkUnit)  checkUnit.textContent  = cfg.checkUnit;
+  if (hintEl)     hintEl.textContent    = cfg.hint;
+  if (revLabel)   revLabel.textContent  = 'Taxminiy oylik daromad:';
+}
+
+function applyCostFields() {
+  const cat = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  document.querySelectorAll('.extra-cost-field').forEach(el => {
+    const allowed = (el.dataset.costCats || '').split(/\s+/).includes(cat);
+    el.style.display = allowed ? '' : 'none';
+    el.querySelectorAll('input').forEach(i => { i.disabled = !allowed; if (!allowed) i.value = ''; });
+  });
+  updateFixedTotal();
+}
+
+function applyConditionalFields() {
+  const cat = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  document.querySelectorAll('.category-conditional-field').forEach(el => {
+    const hidden = (el.dataset.hideCats || '').split(/\s+/);
+    el.style.display = hidden.includes(cat) ? 'none' : '';
+  });
+}
+
+function applyBankFields() {
+  const cat = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  const bankSection = document.getElementById('bankFieldsSection');
+  if (!bankSection) return;
+  const bankCats = ['hotel','tourism','construction','textile','trade','services'];
+  if (bankCats.includes(cat)) {
+    bankSection.style.display = 'block';
+    // Map tourism → hotel bank fields
+    const bankKey = cat === 'tourism' ? 'hotel' : cat;
+    document.querySelectorAll('[id^="bankFields_"]').forEach(el => el.style.display = 'none');
+    const target = document.getElementById(`bankFields_${bankKey}`);
+    if (target) target.style.display = 'block';
+  } else {
+    bankSection.style.display = 'none';
+  }
+}
+
+const catRadios = document.querySelectorAll('.category-radio');
+function applyCategoryPanel() {
+  const sel = document.querySelector('.category-radio:checked')?.value || 'hotel';
+  document.querySelectorAll('.category-panel').forEach(el => {
+    el.style.display = el.dataset.cat === sel ? 'block' : 'none';
+  });
+  catRadios.forEach(r => {
+    const card = document.getElementById('catcard_' + r.value);
+    if (card) {
+      card.style.borderColor = r.checked ? 'var(--bank-blue)' : 'var(--border)';
+      card.style.background  = r.checked ? 'var(--bank-blue-glass)' : 'var(--surface-2)';
+    }
+  });
+  applyMccOptions();
+  applyTargetCustomers();
+  applyCostFields();
+  applyConditionalFields();
+  applyStep2Config();
+  applyBankFields();
+}
+catRadios.forEach(r => r.addEventListener('change', applyCategoryPanel));
+
+// Auto-select first category on load
+if (!document.querySelector('.category-radio:checked')) {
+  const first = document.getElementById('cat_hotel');
+  if (first) first.checked = true;
+}
+applyCategoryPanel();
+
+// ── Dynamic custom cost rows ──────────────────────────────────
+function serializeCustomCosts() {
+  const rows = document.querySelectorAll('.custom-cost-row');
+  const data = [];
+  rows.forEach(row => {
+    const name = row.querySelector('.custom-cost-name')?.value?.trim() || '';
+    const amount = parseFloat(row.querySelector('.custom-cost-amount')?.value) || 0;
+    if (name || amount) data.push({ name, amount });
+  });
+  const hidden = document.getElementById('id_extra_costs_json');
+  if (hidden) hidden.value = JSON.stringify(data);
+}
+
+function addCostRow(name='', amount='') {
+  const container = document.getElementById('customCostRows');
+  const row = document.createElement('div');
+  row.className = 'custom-cost-row';
+  row.innerHTML = `
+    <input type="text" class="custom-cost-name cost-name form-control"
+           placeholder="Xarajat nomi (masalan: Yuk tashish)" value="${name}" style="flex:1.5">
+    <input type="number" class="custom-cost-amount cost-amount form-control"
+           placeholder="Miqdor (UZS)" min="0" value="${amount}" style="flex:1">
+    <button type="button" class="btn-remove-cost" title="O'chirish">
+      <i class="bi bi-x"></i>
+    </button>`;
+  row.querySelector('.btn-remove-cost').addEventListener('click', () => {
+    row.remove(); updateFixedTotal(); serializeCustomCosts();
+  });
+  row.querySelectorAll('input').forEach(i => i.addEventListener('input', () => { updateFixedTotal(); serializeCustomCosts(); }));
+  container.appendChild(row);
+}
+
+document.getElementById('addCostBtn')?.addEventListener('click', () => addCostRow());
+
+// ── Map & Location lookup ─────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  const latInput = document.querySelector('[name$="latitude"]');
+  const lngInput = document.querySelector('[name$="longitude"]');
+  if (latInput && lngInput) {
+    initMapPicker('map-picker', latInput.id || latInput.name, lngInput.id || lngInput.name, 'coord-hint');
+    let lookupTimer = null;
+    const runLookup = () => {
+      clearTimeout(lookupTimer);
+      lookupTimer = setTimeout(async () => {
+        const lat = latInput.value, lng = lngInput.value;
+        if (!lat || !lng) return;
+        const mcc = document.querySelector('select[name$="mcc_code"]')?.value || '5999';
+        try {
+          const resp = await fetch(`{% url 'analysis_location_lookup' %}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&mcc_code=${encodeURIComponent(mcc)}`);
+          if (!resp.ok) return;
+          const data = await resp.json();
+          // Update hidden district field
+          const distHidden = document.getElementById('id_s3_district');
+          if (distHidden && data.district) {
+            distHidden.value = data.district;
+            const hint = document.getElementById('autoDistrictHint');
+            if (hint) hint.textContent = `Tuman: ${data.district}`;
+          }
+          const address    = document.querySelector('[name$="address_detail"]');
+          const landmarks  = document.querySelector('[name$="nearby_landmarks"]');
+          const competitors = document.querySelector('[name$="known_competitors"]');
+          if (address && data.address) address.value = data.address;
+          if (landmarks && data.landmarks?.length) landmarks.value = data.landmarks.join(', ');
+          if (competitors && data.competitors?.length) {
+            competitors.value = data.competitors
+              .map(c => `${c.name || 'Noma\'lum'} - ${c.distance_m}m (${c.type || 'biznes'})`)
+              .join('\n');
+            const hint = document.getElementById('competitorAutoHint');
+            if (hint) hint.textContent = `${data.competitors.length} ta yaqin raqobatchi topildi.`;
+          }
+          if (data.hotel_autofill) {
+            const airp = document.querySelector('[name$="distance_to_airport_km"]');
+            const attr = document.querySelector('[name$="distance_to_top_attraction_km"]');
+            const attrN = document.querySelector('[name$="nearest_attraction_name"]');
+            if (airp && data.hotel_autofill.distance_to_airport_km != null) airp.value = data.hotel_autofill.distance_to_airport_km;
+            if (attr && data.hotel_autofill.distance_to_top_attraction_km != null) attr.value = data.hotel_autofill.distance_to_top_attraction_km;
+            if (attrN && data.hotel_autofill.nearest_attraction_name) attrN.value = data.hotel_autofill.nearest_attraction_name;
+            const rHint = document.getElementById('routeAutofillHint');
+            if (rHint && (data.hotel_autofill.distance_to_airport_km || data.hotel_autofill.distance_to_top_attraction_km)) {
+              const src = data.hotel_autofill.route_source === 'osrm' ? "OSRM yo'l marshruti" : "to'g'ri chiziq masofasi";
+              rHint.textContent = `Masofalar ${src} asosida avtomatik to'ldirildi.`;
+            }
+          }
+        } catch (e) { console.warn('Location lookup failed', e); }
+      }, 450);
+    };
+    latInput.addEventListener('change', runLookup);
+    lngInput.addEventListener('change', runLookup);
+  }
+
+  // ── AI Health Check ────────────────────────────────────────
+  fetch(`{% url 'analysis_ai_health' %}`)
+    .then(r => r.json())
+    .then(data => {
+      const banner = document.getElementById('aiHealthBanner');
+      const icon   = document.getElementById('aiHealthIcon');
+      const title  = document.getElementById('aiHealthTitle');
+      const pills  = document.getElementById('aiProviderPills');
+      const action = document.getElementById('aiHealthAction');
+      if (!banner) return;
+      banner.style.display = 'flex';
+
+      // Build pills for each provider
+      const provMap = data.providers || {};
+      pills.innerHTML = '';
+      Object.entries(provMap).forEach(([key, p]) => {
+        if (p.status === 'not_configured') return;
+        const cls = p.status === 'ok' ? 'pill-ok' : p.status === 'quota_exceeded' ? 'pill-warn' : 'pill-error';
+        const pill = document.createElement('span');
+        pill.className = `ai-provider-pill ${cls}`;
+        pill.textContent = p.label || key;
+        pills.appendChild(pill);
+      });
+
+      if (data.ok) {
+        banner.className = 'ai-health-banner ok';
+        icon.innerHTML = '<i class="bi bi-check-circle"></i>';
+        title.textContent = `AI tayyor — Faol model: ${data.active_model_name || 'Gemini'}`;
+        action.style.display = 'none';
+      } else if (data.quota_exceeded?.length) {
+        banner.className = 'ai-health-banner warn';
+        icon.innerHTML = '<i class="bi bi-exclamation-triangle"></i>';
+        title.textContent = `Diqqat: ${data.quota_exceeded.join(', ')} limiti tugagan — boshqa model tanlang!`;
+        action.style.display = 'block';
+      } else {
+        banner.className = 'ai-health-banner error';
+        icon.textContent = '❌';
+        title.textContent = 'AI xizmati ishlamayapti — sozlamalarni tekshiring';
+        action.style.display = 'block';
+      }
+    })
+    .catch(() => {
+      const banner = document.getElementById('aiHealthBanner');
+      if (banner) {
+        banner.style.display = 'flex';
+        banner.className = 'ai-health-banner warn';
+        document.getElementById('aiHealthIcon').innerHTML = '<i class="bi bi-exclamation-triangle"></i>';
+        document.getElementById('aiHealthTitle').textContent = 'AI holati tekshirib bo\'lmadi';
+      }
+    });
+
+  // Tooltips
+  if (typeof bootstrap !== 'undefined') {
+    document.querySelectorAll('[title]').forEach(el => {
+      if (!el.getAttribute('data-bs-toggle')) el.setAttribute('data-bs-toggle', 'tooltip');
+      bootstrap.Tooltip.getOrCreateInstance(el, { trigger: 'hover' });
+    });
+  }
+
+  // Mark required fields with asterisk and apply initial server-side invalid styles.
+  document.querySelectorAll('#wizardForm input, #wizardForm select, #wizardForm textarea').forEach(el => {
+    if (el.required) {
+      const label = document.querySelector(`label[for="${el.id}"]`);
+      if (label && !label.querySelector('.required-asterisk')) {
+        const mark = document.createElement('span');
+        mark.className = 'required-asterisk';
+        mark.textContent = '*';
+        label.appendChild(mark);
+      }
+    }
+  });
+  document.querySelectorAll('.text-danger.small.mt-1').forEach(err => {
+    const fieldWrap = err.closest('.col-md-12, .col-md-6, .col-md-4, .col-md-3, .col-md-2, .col-12, .mb-3, .input-group');
+    const input = fieldWrap ? fieldWrap.querySelector('input, select, textarea') : null;
+    if (input) input.classList.add('is-invalid');
+    err.classList.add('field-error');
+  });
+
+  // ── Form Auto-Save (LocalStorage) ───────────────────────────────
+  const WIZARD_STORAGE_KEY = 'biznesai_wizard_draft';
+  const wizardForm = document.getElementById('wizardForm');
+  
+  function saveDraft() {
+    const formData = new FormData(wizardForm);
+    const draft = { step: currentStep, data: {} };
+    formData.forEach((value, key) => {
+      if (key !== 'csrfmiddlewaretoken') {
+        if (!draft.data[key]) draft.data[key] = value;
+        else {
+          if (!Array.isArray(draft.data[key])) draft.data[key] = [draft.data[key]];
+          draft.data[key].push(value);
+        }
+      }
+    });
+    localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify(draft));
+  }
+
+  function restoreDraft() {
+    // Only restore if this is a fresh form without server-side prefill
+    if (window.location.search.includes('edit_from')) return;
+    
+    const draftJson = localStorage.getItem(WIZARD_STORAGE_KEY);
+    if (!draftJson) return;
+    
+    try {
+      const draft = JSON.parse(draftJson);
+      if (draft.data) {
+        Object.entries(draft.data).forEach(([key, value]) => {
+          const els = wizardForm.querySelectorAll(`[name="${key}"]`);
+          if (!els.length) return;
+          els.forEach(el => {
+            if (el.type === 'checkbox' || el.type === 'radio') {
+              if (Array.isArray(value)) {
+                el.checked = value.includes(el.value);
+              } else {
+                el.checked = (el.value === value);
+              }
+            } else {
+              el.value = value;
+            }
+          });
+        });
+        
+        // Trigger changes for select logic
+        catRadios.forEach(r => { if (r.checked) applyCategoryPanel(); });
+        document.querySelector('[name$="mcc_code"]')?.dispatchEvent(new Event('change'));
+        if (typeof toggleOpHours === 'function') toggleOpHours();
+      }
+      if (draft.step && draft.step !== currentStep) {
+        const targetStepEl = document.querySelector(`#step${draft.step}`);
+        if (!targetStepEl) {
+          localStorage.removeItem(WIZARD_STORAGE_KEY);
+          return; // Step doesn't exist anymore, abort restore
+        }
+        
+        // Go to saved step without validation checks
+        document.querySelector(`#step${currentStep}`).classList.remove('active');
+        document.querySelector(`#nav-step${currentStep}`).classList.remove('active', 'completed');
+        
+        currentStep = draft.step;
+        
+        targetStepEl.classList.add('active');
+        document.querySelectorAll('.step').forEach((el, i) => {
+          const sn = i + 1;
+          el.classList.remove('active', 'completed');
+          if (sn === currentStep) el.classList.add('active');
+          else if (sn < currentStep) el.classList.add('completed');
+        });
+      }
+    } catch (e) {
+      console.warn("Draft restore failed", e);
+    }
+  }
+
+  // ── Zalog Logic ───────────────────────────────────────────────────
+  const zalogInput = document.getElementById('id_zalog_id');
+  const zalogHint = document.getElementById('zalogHint');
+  const loanInput = document.querySelector('[name$="loan_amount"]');
+  let currentZalogValue = null;
+
+  if (zalogInput) {
+    let checkTimer = null;
+    zalogInput.addEventListener('input', function() {
+      clearTimeout(checkTimer);
+      const val = this.value.trim();
+      currentZalogValue = null;
+      if (!val) {
+        zalogInput.classList.remove('is-invalid', 'is-valid');
+        zalogHint.innerHTML = '<i class="bi bi-info-circle me-1"></i>Garovingiz bo\'lsa, tizim maksimal kredit miqdorini hisoblab beradi.';
+        zalogHint.className = 'text-muted d-block mt-1';
+        return;
+      }
+      
+      checkTimer = setTimeout(() => {
+        fetch(`{% url 'zalog_check' %}?zalog_id=${encodeURIComponent(val)}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.found) {
+              zalogInput.classList.remove('is-invalid');
+              zalogInput.classList.add('is-valid');
+              zalogHint.className = 'text-success d-block mt-1';
+              zalogHint.innerHTML = `<i class="bi bi-check-circle me-1"></i>Garov topildi: ${data.property_type.toUpperCase()} - ${data.total_value.toLocaleString('uz')} UZS (${data.owner})`;
+              currentZalogValue = data.total_value;
+              enforceLoanLimit();
+            } else {
+              // Zalog maydoni ixtiyoriy: topilmasa foydalanuvchini to'smaymiz.
+              zalogInput.classList.remove('is-valid', 'is-invalid');
+              zalogHint.className = 'text-warning d-block mt-1';
+              zalogHint.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Zalog ID topilmadi (ixtiyoriy maydon, davom etishingiz mumkin)';
+            }
+          })
+          .catch(err => console.error('Zalog error:', err));
+      }, 500);
+    });
+  }
+
+  function enforceLoanLimit() {
+    if (!currentZalogValue || !loanInput) return;
+    const maxLoan = currentZalogValue * 0.70;
+    const currentRequested = parseFloat(loanInput.value) || 0;
+    
+    // Clear previous warnings
+    const parent = loanInput.closest('.col-md-6');
+    let warnEl = parent.querySelector('.zalog-warning');
+    if (!warnEl) {
+      warnEl = document.createElement('small');
+      warnEl.className = 'text-danger d-block mt-1 zalog-warning fw-600';
+      parent.appendChild(warnEl);
+    }
+    
+    if (currentRequested > maxLoan) {
+      warnEl.innerHTML = `<i class="bi bi-shield-lock me-1"></i>Garov asosida ruxsat etilgan maksimal miqdor: ${maxLoan.toLocaleString('uz')} UZS`;
+      loanInput.value = maxLoan;
+      loanInput.classList.add('is-invalid');
+      setTimeout(() => loanInput.classList.remove('is-invalid'), 1500);
+    } else {
+      warnEl.innerHTML = '';
+    }
+  }
+
+  if (loanInput) {
+    loanInput.addEventListener('input', enforceLoanLimit);
+    loanInput.addEventListener('change', enforceLoanLimit);
+  }
+
+  // Bind change events to save draft
+  wizardForm.addEventListener('change', saveDraft);
+  wizardForm.addEventListener('input', saveDraft);
+
+  // Restore on load
+  restoreDraft();
+  
+  // Re-check Zalog on load if filled
+  if (zalogInput && zalogInput.value) {
+    zalogInput.dispatchEvent(new Event('input'));
+  }
+  // Submit handling: keep button enabled, show short loading, then submit.
+  const wizardFormEl = document.getElementById('wizardForm');
+  const submitBtn = document.getElementById('submitBtn');
+  let delayedSubmitTriggered = false;
+
+  wizardFormEl.addEventListener('submit', function(e) {
+    if (delayedSubmitTriggered) return;
+    e.preventDefault();
+
+    // Lightweight inline validation feedback.
+    let firstInvalid = null;
+    wizardFormEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+    wizardFormEl.querySelectorAll('.field-error.dynamic').forEach(el => el.remove());
+    wizardFormEl.querySelectorAll('input, select, textarea').forEach(el => {
+      if (el.disabled) return;
+      if (!el.checkValidity()) {
+        el.classList.add('is-invalid');
+        if (!firstInvalid) firstInvalid = el;
+        const msg = document.createElement('div');
+        msg.className = 'field-error dynamic';
+        msg.textContent = el.validationMessage || "Maydon to'ldirilishi shart";
+        (el.parentElement || el).appendChild(msg);
+      }
+    });
+    if (firstInvalid) {
+      firstInvalid.focus();
+      return;
+    }
+
+    serializeCustomCosts();
+    if (submitBtn) {
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Tahlil qilinmoqda...';
+      submitBtn.setAttribute('aria-busy', 'true');
+    }
+
+    setTimeout(() => {
+      const main = document.querySelector('.main-content');
+      if (main) main.classList.add('fade-out');
+      setTimeout(() => {
+        delayedSubmitTriggered = true;
+        wizardFormEl.requestSubmit();
+      }, 130);
+    }, 2200);
+  });
+});
+</script>
+{% endblock %}

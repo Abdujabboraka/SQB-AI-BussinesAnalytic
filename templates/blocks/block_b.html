@@ -1,0 +1,277 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}B Blok — Talab Prognozi — BiznesAI{% endblock %}
+
+{% block extra_css %}
+<style>
+  @keyframes loading-spin {
+    to { transform: rotate(360deg); }
+  }
+  .loading-spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: loading-spin 0.9s linear infinite;
+    margin: 0 auto 20px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1280px;">
+
+  {# Breadcrumb #}
+  <nav class="mb-3">
+    <ol class="breadcrumb small mb-0">
+      <li class="breadcrumb-item">
+        <a href="/analysis/{{ analysis.pk }}/dashboard/" class="text-bank">Dashboard</a>
+      </li>
+      <li class="breadcrumb-item active text-muted">B Blok — Talab Prognozi</li>
+    </ol>
+  </nav>
+
+  {# Page header #}
+  <div class="d-flex align-items-start justify-content-between mb-4">
+    <div>
+      <h1 class="h3 fw-700 mb-1">
+        <i class="bi bi-bar-chart-line me-2 text-bank" style="font-size:1.2rem;"></i>B Bloki — Talab Prognozi
+      </h1>
+      <p class="text-muted mb-0" style="font-size:0.875rem;">
+        12 va 36 oylik daromad prognozi + mavsumiylik tahlili
+      </p>
+    </div>
+    {% if block %}
+      <span class="score-badge {% if block.demand_score >= 70 %}score-badge-green{% elif block.demand_score >= 45 %}score-badge-amber{% else %}score-badge-red{% endif %}"
+            style="font-size:0.95rem; padding:8px 18px;">
+        {{ block.demand_score|floatformat:0 }}<span class="fw-400 text-muted">/100</span>
+      </span>
+    {% endif %}
+  </div>
+
+  {# ══ LOADING STATE ══════════════════════════════════════════ #}
+  {% if not block %}
+  <div class="card-premium text-center" style="padding:56px 24px;">
+    <div class="loading-spinner"></div>
+    <h5 class="fw-700 text-bank mb-2">Tahlil hisoblanmoqda...</h5>
+    <p class="text-muted mb-4" style="font-size:0.875rem;">
+      Iltimos, kuting. AI ma'lumotlarni qayta ishlamoqda.
+    </p>
+    {# Placeholder empty boxes while loading #}
+    <div class="row g-3 justify-content-center mt-2">
+      <div class="col-md-3">
+        <div class="block-empty-box" style="min-height:110px;">
+          <div class="block-empty-icon"><i class="bi bi-bar-chart-steps"></i></div>
+          <div class="block-empty-label">P10 — Pessimistik</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="block-empty-box" style="min-height:110px;">
+          <div class="block-empty-icon"><i class="bi bi-bar-chart"></i></div>
+          <div class="block-empty-label">P50 — Mediana</div>
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="block-empty-box" style="min-height:110px;">
+          <div class="block-empty-icon"><i class="bi bi-bar-chart-line"></i></div>
+          <div class="block-empty-label">P90 — Optimistik</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% else %}
+
+  {# Demo warning #}
+  {% if block.is_mock %}
+  <div class="mock-warning mb-4">
+    <i class="bi bi-info-circle"></i>
+    Demo ma'lumotlar — sintetik prognoz ko'rsatilmoqda. Haqiqiy AI natijasi emas.
+  </div>
+  {% endif %}
+
+  {# ══ P10 / P50 / P90 ════════════════════════════════════════ #}
+  <div class="section-title mb-3">
+    <i class="bi bi-bar-chart text-bank"></i>Daromad Prognozi
+  </div>
+  <div class="row g-3 mb-4">
+
+    {# P10 — Pessimistic #}
+    <div class="col-md-4">
+      {% if block.revenue_p10 %}
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-label">Pessimistik (P10)</div>
+        <div class="kpi-value text-danger" style="font-size:1.5rem;">
+          {{ block.revenue_p10|floatformat:0 }}
+        </div>
+        <div class="kpi-desc">so'm/oy — Past chegara</div>
+      </div>
+      {% else %}
+      <div class="block-empty-box" style="min-height:120px;">
+        <div class="block-empty-icon"><i class="bi bi-bar-chart-steps"></i></div>
+        <div class="block-empty-label">P10 (Pessimistik)</div>
+        <div class="small mt-1" style="font-size:0.75rem;">Ma'lumot mavjud emas</div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# P50 — Median #}
+    <div class="col-md-4">
+      {% if block.revenue_p50 %}
+      <div class="kpi-card kpi-primary">
+        <div class="kpi-label">Mediana (P50) — Asosiy prognoz</div>
+        <div class="kpi-value" style="font-size:1.5rem;">
+          {{ block.revenue_p50|floatformat:0 }}
+        </div>
+        <div class="kpi-desc">so'm/oy — Asosiy prognoz</div>
+      </div>
+      {% else %}
+      <div class="block-empty-box" style="min-height:120px;">
+        <div class="block-empty-icon"><i class="bi bi-bar-chart"></i></div>
+        <div class="block-empty-label">P50 (Mediana)</div>
+        <div class="small mt-1" style="font-size:0.75rem;">Ma'lumot mavjud emas</div>
+      </div>
+      {% endif %}
+    </div>
+
+    {# P90 — Optimistic #}
+    <div class="col-md-4">
+      {% if block.revenue_p90 %}
+      <div class="kpi-card kpi-success">
+        <div class="kpi-label">Optimistik (P90)</div>
+        <div class="kpi-value text-success" style="font-size:1.5rem;">
+          {{ block.revenue_p90|floatformat:0 }}
+        </div>
+        <div class="kpi-desc">so'm/oy — Yuqori chegara</div>
+      </div>
+      {% else %}
+      <div class="block-empty-box" style="min-height:120px;">
+        <div class="block-empty-icon"><i class="bi bi-bar-chart-line"></i></div>
+        <div class="block-empty-label">P90 (Optimistik)</div>
+        <div class="small mt-1" style="font-size:0.75rem;">Ma'lumot mavjud emas</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ FORECAST CHART ══════════════════════════════════════════ #}
+  <div class="section-title mb-3">
+    <i class="bi bi-graph-up text-bank"></i>12 Oylik Prognoz Grafigi
+  </div>
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6>Daromad Prognozi — Ishonch oralig'i bilan</h6>
+      <span class="score-badge score-badge-gray">12 oy</span>
+    </div>
+    <div class="card-body-premium">
+      {% if block.revenue_p50 %}
+      <div style="height:280px; position:relative;">
+        <canvas id="forecastChart"></canvas>
+      </div>
+      {% else %}
+      <div class="block-empty-box" style="min-height:220px;">
+        <div class="block-empty-icon"><i class="bi bi-graph-up"></i></div>
+        <div class="block-empty-label">Prognoz grafigi mavjud emas</div>
+        <div class="small mt-2" style="font-size:0.775rem; color:var(--text-muted);">
+          Daromad prognozi ma'lumotlari hisoblanmagan
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ══ SEASONALITY ═════════════════════════════════════════════ #}
+  <div class="section-title mb-3">
+    <i class="bi bi-calendar-week text-bank"></i>Mavsumiylik Tahlili
+  </div>
+  <div class="row g-3 mb-4">
+
+    {# Weekly chart #}
+    <div class="col-md-6">
+      <div class="card-premium h-100" style="margin-bottom:0;">
+        <div class="card-header-premium">
+          <h6>Haftalik Savdo Koeffitsientlari</h6>
+        </div>
+        <div class="card-body-premium">
+          {% if block.revenue_p50 %}
+          <div style="height:190px; position:relative;">
+            <canvas id="weeklyChart"></canvas>
+          </div>
+          {% else %}
+          <div class="block-empty-box" style="min-height:160px;">
+            <div class="block-empty-icon"><i class="bi bi-calendar-week"></i></div>
+            <div class="block-empty-label">Haftalik koeffitsientlar yo'q</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Seasonal indicators #}
+    <div class="col-md-6">
+      <div class="card-premium h-100" style="margin-bottom:0;">
+        <div class="card-header-premium">
+          <h6>Mavsumiy Ko'rsatkichlar</h6>
+        </div>
+        <div class="card-body-premium">
+          {% if block.seasonality_ramazon_boost_pct or block.seasonality_navro_boost_pct %}
+          <div class="metric-compare-row">
+            <div>
+              <div class="fw-600" style="font-size:0.875rem;">Ramazon davri</div>
+              <div class="text-muted" style="font-size:0.775rem;">Mart–Aprel oylari</div>
+            </div>
+            <span class="score-badge score-badge-green">+{{ block.seasonality_ramazon_boost_pct|floatformat:0 }}%</span>
+          </div>
+          <div class="metric-compare-row">
+            <div>
+              <div class="fw-600" style="font-size:0.875rem;">Navro'z davri</div>
+              <div class="text-muted" style="font-size:0.775rem;">21-Mart atrofi</div>
+            </div>
+            <span class="score-badge score-badge-green">+{{ block.seasonality_navro_boost_pct|floatformat:0 }}%</span>
+          </div>
+          {% else %}
+          <div class="block-empty-box" style="min-height:160px;">
+            <div class="block-empty-icon"><i class="bi bi-calendar-event"></i></div>
+            <div class="block-empty-label">Mavsumiy ma'lumotlar yo'q</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ══ AI COMMENTARY ═══════════════════════════════════════════ #}
+  {% if block.ai_commentary %}
+  <div class="section-title mb-3">
+    <i class="bi bi-robot text-bank"></i>AI Tahlil Xulosasi
+  </div>
+  <div class="ai-commentary mb-4">
+    {{ block.ai_commentary|linebreaks }}
+  </div>
+  {% endif %}
+
+  {# ══ EVIDENCE PANEL ══════════════════════════════════════════ #}
+  {% include 'blocks/_evidence_panel.html' with block_evidence=block_evidence block_label='B Blok' block_icon='bi-bar-chart-line' %}
+
+  {# Back button #}
+  <a href="/analysis/{{ analysis.pk }}/dashboard/" class="btn btn-outline-bank">
+    <i class="bi bi-arrow-left me-1"></i>Dashboardga qaytish
+  </a>
+
+  {% endif %}{# /if block #}
+
+  <div style="height:40px;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/charts.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  {% if block and block.revenue_p50 %}
+  initForecastChart('forecastChart', {{ forecast_labels }}, {{ forecast_p50 }}, {{ forecast_low }}, {{ forecast_high }});
+  initWeeklyChart('weeklyChart', {{ weekly_labels }}, {{ weekly_data }});
+  {% endif %}
+});
+</script>
+{% endblock %}

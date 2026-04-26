@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — BiznesAI{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1280px;">
+
+  {# ══ PAGE HEADER ═════════════════════════════════════════════ #}
+  <div class="d-flex align-items-start justify-content-between mb-4">
+    <div>
+      <h1 class="h3 fw-700 mb-1">Dashboard</h1>
+      <p class="text-muted mb-0" style="font-size:0.875rem;">
+        Xush kelibsiz, <strong>{{ user.first_name|default:user.username }}</strong> — BiznesAI tahliliy tizimi
+      </p>
+    </div>
+    <a href="{% url 'analysis_create' %}" class="btn btn-bank">
+      <i class="bi bi-plus-lg me-1"></i>Yangi Tahlil
+    </a>
+  </div>
+
+  {# ══ KPI CARDS ════════════════════════════════════════════════ #}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="kpi-card kpi-primary">
+        <div class="kpi-label">Jami tahlillar</div>
+        <div class="kpi-value text-primary">{{ total_count }}</div>
+        <div class="kpi-desc">Barcha yuborilgan arizalar</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="kpi-card kpi-success">
+        <div class="kpi-label">Ijobiy qarorlar</div>
+        <div class="kpi-value text-success">{{ ha_count }}</div>
+        <div class="kpi-desc">"HA" tavsiyasi berilgan</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-label">Salbiy qarorlar</div>
+        <div class="kpi-value text-danger">{{ yoq_count }}</div>
+        <div class="kpi-desc">"YO'Q" tavsiyasi berilgan</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="kpi-card kpi-neutral">
+        <div class="kpi-label">Jarayonda</div>
+        <div class="kpi-value text-secondary">{{ processing_count|default:"0" }}</div>
+        <div class="kpi-desc">Hozirda tahlil qilinmoqda</div>
+      </div>
+    </div>
+  </div>
+
+  {# ══ ANALYSIS TABLE ═══════════════════════════════════════════ #}
+  <div class="card-premium">
+    <div class="card-header-premium">
+      <h6><i class="bi bi-list-ul me-2 text-bank"></i>Mening tahlillarim</h6>
+      {% if total_count > 0 %}
+      <a href="{% url 'analysis_create' %}" class="btn btn-outline-bank btn-sm">
+        <i class="bi bi-plus me-1"></i>Yangi
+      </a>
+      {% endif %}
+    </div>
+
+    {% if analyses %}
+    <div id="analysis-list" class="table-responsive" style="margin:0;">
+      <table class="table-institutional w-100">
+        <thead>
+          <tr>
+            <th>Biznes turi</th>
+            <th>Tuman</th>
+            <th>Investitsiya</th>
+            <th>Holat</th>
+            <th>Ball</th>
+            <th>Sana</th>
+            <th class="text-end">Amallar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in analyses %}
+          <tr>
+            <td>
+              <div class="fw-600" style="font-size:0.875rem;">{{ a.business_type }}</div>
+              <div class="text-muted" style="font-size:0.775rem;">{{ a.get_mcc_code_display }}</div>
+            </td>
+            <td style="font-size:0.875rem;">
+              <i class="bi bi-geo-alt text-muted me-1"></i>{{ a.district }}
+            </td>
+            <td class="fw-600" style="font-size:0.875rem; white-space:nowrap;">
+              {{ a.investment_amount|floatformat:0 }} so'm
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <span class="status-dot {{ a.status }}"></span>
+                <span style="font-size:0.825rem;">{{ a.get_status_display }}</span>
+              </div>
+            </td>
+            <td>
+              {% if a.final_score %}
+                <div class="d-flex align-items-center gap-2">
+                  <span class="fw-700" style="font-size:0.875rem;">{{ a.final_score|floatformat:1 }}</span>
+                  {% if a.final_recommendation == 'YES' %}
+                    <i class="bi bi-check-circle-fill text-success" style="font-size:0.8rem;" title="Tavsiya etiladi"></i>
+                  {% elif a.final_recommendation == 'NO' %}
+                    <i class="bi bi-x-circle-fill text-danger" style="font-size:0.8rem;" title="Tavsiya etilmaydi"></i>
+                  {% endif %}
+                </div>
+              {% else %}
+                <span class="text-muted" style="font-size:0.875rem;">—</span>
+              {% endif %}
+            </td>
+            <td class="text-muted" style="font-size:0.8rem; white-space:nowrap;">
+              {{ a.created_at|date:"d.m.Y H:i" }}
+            </td>
+            <td class="text-end">
+              <div class="d-flex align-items-center justify-content-end gap-2">
+                {% if a.status == 'done' %}
+                  <a href="/analysis/{{ a.pk }}/dashboard/" class="btn btn-bank btn-sm">
+                    <i class="bi bi-bar-chart me-1"></i>Ko'rish
+                  </a>
+                {% elif a.status == 'processing' or a.status == 'pending' %}
+                  <a href="{% url 'analysis_status_page' pk=a.pk %}" class="btn btn-outline-bank btn-sm">
+                    <i class="bi bi-hourglass-split me-1"></i>Kutish
+                  </a>
+                {% else %}
+                  <form method="post" action="{% url 'analysis_retry' pk=a.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-secondary"
+                            title="Qayta boshlash" data-bs-toggle="tooltip">
+                      <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                  </form>
+                  <a href="{% url 'analysis_edit' pk=a.pk %}"
+                     class="btn btn-sm btn-outline-bank"
+                     title="Tahrirlash va qayta yuborish" data-bs-toggle="tooltip">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                {% endif %}
+
+                <button type="button" class="btn btn-outline-danger btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteConfirmModal"
+                        data-business-name="{{ a.business_type }}"
+                        data-delete-url="{% url 'analysis_delete' pk=a.pk %}"
+                        data-next="{{ request.get_full_path }}"
+                        title="O'chirish">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Pagination #}
+    {% if is_paginated %}
+    <div class="d-flex justify-content-center p-3" style="border-top:1px solid var(--border);">
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}">‹</a>
+          </li>
+          {% endif %}
+          <li class="page-item active">
+            <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+          </li>
+          {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}">›</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+
+    {% else %}
+    {# ── Empty State ── #}
+    <div class="empty-state">
+      <span class="empty-state-icon"><i class="bi bi-building"></i></span>
+      <div class="empty-state-title">Tahlillar mavjud emas</div>
+      <div class="empty-state-desc">
+        Birinchi biznes tahlilini boshlang. AI tizimi sizning loyihangizni kredit talablariga muvofiqligini tekshiradi.
+      </div>
+      <a href="{% url 'analysis_create' %}" class="btn btn-bank">
+        <i class="bi bi-plus-lg me-2"></i>Birinchi tahlilni boshlash
+      </a>
+    </div>
+    {% endif %}
+
+  </div>{# /card-premium #}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
+    new bootstrap.Tooltip(el);
+  });
+});
+</script>
+{% endblock %}

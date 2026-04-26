@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}D Blok — Moliyaviy Tahlil — BiznesAI{% endblock %}
+{% block content %}
+<div class="container-fluid px-4">
+  <nav class="mb-3"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="/analysis/{{ analysis.pk }}/dashboard/" class="text-bank">Dashboard</a></li>
+    <li class="breadcrumb-item active">D Blok</li>
+  </ol></nav>
+
+  <div class="page-header mb-4">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <h1 class="h4 mb-1"><i class="bi bi-cash-coin me-2"></i>D Bloki — Moliyaviy Maqsadga Muvofiqlik</h1>
+        <p class="subtitle mb-0">Monte-Karlo simulatsiyasi · BEP · ROI · Pul oqimi</p>
+      </div>
+      {% if block %}<span class="score-badge score-badge-blue fs-6">{{ block.viability_score|floatformat:0 }}/100</span>{% endif %}
+    </div>
+  </div>
+
+  {% if not block %}
+  <div class="card-premium p-5 text-center"><div style="font-size:3rem">⏳</div><h5 class="mt-3">Tahlil hali tugamagan</h5></div>
+  {% else %}
+
+  <!-- Key Metrics -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">BEP Muddati</div>
+        {% if block.breakeven_months < 999 %}
+          <div class="metric-value {% if block.breakeven_months <= 18 %}text-green{% elif block.breakeven_months <= 36 %}text-amber{% else %}text-red{% endif %}">
+            {{ block.breakeven_months|floatformat:1 }}
+          </div>
+          <div class="metric-label">oy</div>
+        {% else %}
+          <div class="metric-value text-red">∞</div>
+          <div class="metric-label">hisob-kitobsiz</div>
+        {% endif %}
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">Muvaffaqiyat ehtimoli</div>
+        <div class="metric-value {% if block.mc_success_probability >= 70 %}text-green{% elif block.mc_success_probability >= 50 %}text-amber{% else %}text-red{% endif %}">
+          {{ block.mc_success_probability|floatformat:0 }}%
+        </div>
+        <div class="metric-label">foyda ko'rish (MC)</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">ROI — 12 oy</div>
+        <div class="metric-value {% if block.roi_12mo >= 20 %}text-green{% elif block.roi_12mo >= 0 %}text-amber{% else %}text-red{% endif %}">
+          {{ block.roi_12mo|floatformat:1 }}%
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">ROI — 36 oy</div>
+        <div class="metric-value {% if block.roi_36mo >= 50 %}text-green{% elif block.roi_36mo >= 0 %}text-amber{% else %}text-red{% endif %}">
+          {{ block.roi_36mo|floatformat:1 }}%
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MC Histogram + Cash Flow side by side -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">Monte-Karlo Foyda Taqsimoti (1,000 iteratsiya)</div>
+        <div style="height:260px"><canvas id="histogramChart"></canvas></div>
+        <div class="d-flex gap-2 mt-2">
+          <span class="small"><span style="display:inline-block;width:12px;height:12px;background:#DC2626;border-radius:2px;margin-right:4px"></span>Zarar</span>
+          <span class="small"><span style="display:inline-block;width:12px;height:12px;background:#16A34A;border-radius:2px;margin-right:4px"></span>Foyda</span>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">Kumulyativ Pul Oqimi (24 oy)</div>
+        <div style="height:260px"><canvas id="cashflowChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unit Economics -->
+  <div class="card-premium mb-4">
+    <div class="card-header-premium"><h6><i class="bi bi-calculator me-2 text-bank"></i>Birlik Iqtisodiyoti</h6></div>
+    <div class="card-body-premium">
+      <div class="row g-3">
+        <div class="col-6 col-md-3">
+          <div class="text-muted small fw-600">CAC</div>
+          <div class="fw-800 fs-5">{{ block.cac_uzs|floatformat:0 }} so'm</div>
+          <div class="small text-muted">Mijoz jalb qilish narxi</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small fw-600">LTV</div>
+          <div class="fw-800 fs-5">{{ block.ltv_uzs|floatformat:0 }} so'm</div>
+          <div class="small text-muted">Mijoz umrbod qiymati</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small fw-600">LTV/CAC</div>
+          <div class="fw-800 fs-5 {% if block.ltv_cac_ratio >= 3 %}text-green{% elif block.ltv_cac_ratio >= 1 %}text-amber{% else %}text-red{% endif %}">
+            {{ block.ltv_cac_ratio|floatformat:1 }}x
+          </div>
+          <div class="small text-muted">{% if block.ltv_cac_ratio >= 3 %}Yaxshi{% elif block.ltv_cac_ratio >= 1 %}Qoniqarli{% else %}Past{% endif %}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="text-muted small fw-600">Gross Margin</div>
+          <div class="fw-800 fs-5">{{ block.gross_margin_pct|floatformat:1 }}%</div>
+          <div class="small text-muted">Yalpi foyda ulushi</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ai-commentary mb-4">
+    <div class="fw-700 mb-2 text-bank small text-uppercase"><i class="bi bi-robot me-1"></i>Moliyaviy Tahlil</div>
+    {{ block.ai_commentary|linebreaks }}
+  </div>
+
+  {% include 'blocks/_evidence_panel.html' with block_evidence=block_evidence block_label='D Blok' block_icon='bi-cash-coin' %}
+
+  <a href="/analysis/{{ analysis.pk }}/dashboard/" class="btn btn-outline-bank">
+    <i class="bi bi-arrow-left me-1"></i>Dashboardga qaytish
+  </a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/charts.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  {% if block %}
+  initHistogramChart('histogramChart', {{ mc_distribution }});
+  initCashFlowChart('cashflowChart', {{ cashflow_labels }}, {{ cashflow_data }});
+  {% endif %}
+});
+</script>
+{% endblock %}

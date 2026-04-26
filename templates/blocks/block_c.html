@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}C Blok — Joylashuv Razvedkasi — BiznesAI{% endblock %}
+{% block content %}
+<div class="container-fluid px-4">
+  <nav class="mb-3"><ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="/analysis/{{ analysis.pk }}/dashboard/" class="text-bank">Dashboard</a></li>
+    <li class="breadcrumb-item active">C Blok</li>
+  </ol></nav>
+
+  <div class="page-header mb-4">
+    <div class="d-flex align-items-center justify-content-between">
+      <div>
+        <h1 class="h4 mb-1"><i class="bi bi-geo-alt me-2"></i>C Bloki — Joylashuv Razvedkasi</h1>
+        <p class="subtitle mb-0">Passajirlik oqimi, raqobatchilar va isochrone tahlil</p>
+      </div>
+      {% if block %}<span class="score-badge score-badge-blue fs-6">{{ block.location_score|floatformat:0 }}/100</span>{% endif %}
+    </div>
+  </div>
+
+  {% if not block %}
+  <div class="card-premium p-5 text-center"><div style="font-size:3rem">⏳</div><h5 class="mt-3">Tahlil hali tugamagan</h5></div>
+  {% else %}
+
+  {% if block.is_mock %}<div class="mock-warning mb-3"><i class="bi bi-info-circle"></i>Demo ma'lumotlar — OSM Overpass + sintetik oqim</div>{% endif %}
+
+  <!-- Metric Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">Joylashuv bali</div>
+        <div class="metric-value text-bank">{{ block.location_score|floatformat:0 }}<span class="fs-6">/100</span></div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">5 daqiqa (piyoda)</div>
+        <div class="metric-value">{{ block.isochrone_demand_5min|floatformat:0 }}</div>
+        <div class="metric-label">kishi</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">10 daqiqa (piyoda)</div>
+        <div class="metric-value">{{ block.isochrone_demand_10min|floatformat:0 }}</div>
+        <div class="metric-label">kishi</div>
+      </div>
+    </div>
+    <div class="col-6 col-lg-3">
+      <div class="metric-card text-center">
+        <div class="small text-muted fw-600 mb-1">Anchor bali</div>
+        <div class="metric-value text-purple" style="color:#7C3AED">{{ block.anchor_effect_score|floatformat:0 }}<span class="fs-6">/100</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6><i class="bi bi-map me-2 text-bank"></i>Joylashuv Xaritasi</h6>
+      <div class="d-flex gap-2 align-items-center small text-muted">
+        <span>🔵 Siz</span><span>🟢 Kam risk</span><span>🟡 O'rta</span><span>🔴 Yuqori</span><span>⭐ Anchor</span>
+      </div>
+    </div>
+    <div class="p-2">
+      <div id="location-map"
+           data-lat="{{ analysis.latitude }}"
+           data-lng="{{ analysis.longitude }}"
+           data-competitors="{{ competitors_json }}"
+           data-anchors="{{ anchors_json }}"
+           data-mode="location">
+      </div>
+    </div>
+  </div>
+
+  <!-- Footfall Charts -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-8">
+      <div class="chart-wrapper">
+        <div class="chart-title">Soatlik Passajirlik Oqimi (kuniga)</div>
+        <div style="height:220px"><canvas id="hourlyChart"></canvas></div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="chart-wrapper">
+        <div class="chart-title">Haftalik Oqim</div>
+        <div style="height:220px"><canvas id="dailyChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Anchor Businesses -->
+  {% if block.anchor_businesses %}
+  <div class="card-premium mb-4">
+    <div class="card-header-premium"><h6>⭐ Anchor Ob'ektlar (yaqin joylar)</h6></div>
+    <div class="card-body-premium">
+      <div class="row g-2">
+        {% for anchor in block.anchor_businesses %}
+        <div class="col-md-4">
+          <div style="padding:14px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border)">
+            <div class="fw-700">{{ anchor.name }}</div>
+            <div class="small text-muted">{{ anchor.type }} · {{ anchor.distance_m }}m</div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="ai-commentary mb-4">
+    <div class="fw-700 mb-2 text-bank small text-uppercase"><i class="bi bi-robot me-1"></i>Gemini AI Tahlili</div>
+    {{ block.ai_commentary|linebreaks }}
+  </div>
+
+  {% include 'blocks/_evidence_panel.html' with block_evidence=block_evidence block_label='C Blok' block_icon='bi-geo-alt' %}
+
+  <a href="/analysis/{{ analysis.pk }}/dashboard/" class="btn btn-outline-bank">
+    <i class="bi bi-arrow-left me-1"></i>Dashboardga qaytish
+  </a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/charts.js' %}"></script>
+<script src="{% static 'js/map.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  {% if block %}
+  initLocationMap('location-map');
+  initFootfallChart('hourlyChart', {{ hourly_labels }}, {{ hourly_data }}, '#1B4FD8');
+  initFootfallChart('dailyChart', {{ daily_labels }}, {{ daily_data }}, '#16A34A');
+  {% endif %}
+});
+</script>
+{% endblock %}

@@ -1,0 +1,571 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Tahlil Natijasi — {{ analysis.business_type }} — BiznesAI{% endblock %}
+
+{% block extra_css %}
+<style>
+  #competitor-map {
+    height: 380px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+  }
+
+  .score-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 10px;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1280px;">
+
+  {# ══ 1. PAGE HEADER ══════════════════════════════════════════ #}
+  <div class="dashboard-page-header mb-4">
+    <div class="row g-3 align-items-start">
+
+      {# — Left: Business info + recommendation — #}
+      <div class="col-lg-8">
+        <nav class="mb-2">
+          <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item">
+              <a href="{% url 'home' %}" class="text-bank">Dashboard</a>
+            </li>
+            <li class="breadcrumb-item active text-muted">Tahlil natijasi</li>
+          </ol>
+        </nav>
+
+        <div class="mb-2">
+          {% if analysis.final_recommendation == 'YES' %}
+            <span class="recommendation-banner-full rec-yes">
+              <i class="bi bi-check-circle-fill"></i> TAVSIYA ETILADI
+            </span>
+          {% elif analysis.final_recommendation == 'NO' %}
+            <span class="recommendation-banner-full rec-no">
+              <i class="bi bi-x-circle-fill"></i> TAVSIYA ETILMAYDI
+            </span>
+          {% else %}
+            <span class="recommendation-banner-full rec-caution">
+              <i class="bi bi-exclamation-triangle-fill"></i> QO'SHIMCHA TAHLIL KERAK
+            </span>
+          {% endif %}
+        </div>
+
+        <h1 class="h3 fw-700 mb-1">{{ analysis.business_type }}</h1>
+        <p class="text-muted mb-3" style="font-size:0.875rem;">
+          <i class="bi bi-geo-alt me-1"></i>{{ analysis.district }} tumani
+          &nbsp;·&nbsp;
+          <i class="bi bi-calendar3 me-1"></i>{{ analysis.created_at|date:"d.m.Y" }}
+          {% if analysis.mcc_code %}
+            &nbsp;·&nbsp;<span class="score-badge score-badge-gray">MCC {{ analysis.mcc_code }}</span>
+          {% endif %}
+        </p>
+
+        {# Key metrics row #}
+        <div class="d-flex flex-wrap gap-3" style="font-size:0.875rem;">
+          <div>
+            <div class="kpi-label" style="margin-bottom:4px;">Investitsiya</div>
+            <div class="fw-700">{{ analysis.investment_amount|floatformat:0 }} so'm</div>
+          </div>
+          {% if analysis.loan_amount %}
+          <div style="border-left:1px solid var(--border); padding-left:16px;">
+            <div class="kpi-label" style="margin-bottom:4px;">Kredit miqdori</div>
+            <div class="fw-700">{{ analysis.loan_amount|floatformat:0 }} so'm</div>
+          </div>
+          {% endif %}
+          {% if analysis.target_monthly_revenue %}
+          <div style="border-left:1px solid var(--border); padding-left:16px;">
+            <div class="kpi-label" style="margin-bottom:4px;">Maqsad daromad/oy</div>
+            <div class="fw-700">{{ analysis.target_monthly_revenue|floatformat:0 }} so'm</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# — Right: Composite score + PDF — #}
+      <div class="col-lg-4">
+        <div class="composite-score-box">
+          <div class="kpi-label mb-2">KOMPOZIT BALL</div>
+          <div class="composite-score-value">
+            {{ final_score|floatformat:1 }}<span class="composite-score-max">/100</span>
+          </div>
+          <div class="text-muted small mt-1 mb-3">
+            {% if final_score >= 70 %}Yuqori ko'rsatkich
+            {% elif final_score >= 45 %}O'rta ko'rsatkich
+            {% else %}Past ko'rsatkich{% endif %}
+          </div>
+          <a href="{% url 'pdf_export' pk=analysis.pk %}" class="btn btn-outline-bank btn-sm w-100">
+            <i class="bi bi-file-pdf me-1"></i>PDF Hisobotni yuklash
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ══ 2. AI INSIGHTS ══════════════════════════════════════════ #}
+  {% if analysis.final_commentary %}
+  <div class="ai-insights-panel mb-4">
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <i class="bi bi-robot fs-6 text-bank"></i>
+      <span class="fw-700 text-bank" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.06em;">
+        AI Analitik Xulosa
+      </span>
+    </div>
+    <div class="ai-insights-content">
+      {{ analysis.final_commentary|linebreaks }}
+    </div>
+  </div>
+  {% endif %}
+
+  {# ══ 3. BLOCK CARDS (A–E) ════════════════════════════════════ #}
+  <div class="section-title mb-3">
+    <i class="bi bi-grid-3x3-gap text-bank"></i>Blok Baholari
+  </div>
+  <div class="row g-3 mb-4">
+    {% for card in block_cards %}
+    <div class="col-6 col-lg">
+      {% if card.score and card.score > 0 %}
+      <a href="{{ card.url }}" class="block-card">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="block-letter">{{ card.letter }}</span>
+          <span class="score-badge {% if card.score >= 70 %}score-badge-green{% elif card.score >= 45 %}score-badge-amber{% else %}score-badge-red{% endif %}">
+            {{ card.score|floatformat:0 }}
+          </span>
+        </div>
+        <div class="block-name">{{ card.label }}</div>
+        <div class="block-metric">{{ card.key_metric }}</div>
+        <div class="score-bar">
+          <div class="score-bar-fill {% if card.score >= 70 %}bg-success{% elif card.score >= 45 %}bg-warning{% else %}bg-danger{% endif %}"
+               style="width:{{ card.score|floatformat:0 }}%"></div>
+        </div>
+      </a>
+      {% else %}
+      <div class="block-empty-box">
+        <div class="block-empty-icon"><i class="bi bi-hourglass"></i></div>
+        <div class="block-letter mb-1">{{ card.letter }}</div>
+        <div class="block-empty-label">{{ card.label }}</div>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ══ 4. BENCHMARKING ═════════════════════════════════════════ #}
+  <div class="section-title mb-3">
+    <i class="bi bi-calculator text-bank"></i>Benchmarking va Validatsiya
+  </div>
+  <div class="row g-3 mb-4">
+
+    {# Revenue Validation #}
+    <div class="col-md-6">
+      <div class="card-premium h-100" style="margin-bottom:0;">
+        <div class="card-header-premium">
+          <h6><i class="bi bi-graph-up me-2 text-bank"></i>Daromad Validatsiyasi</h6>
+        </div>
+        <div class="card-body-premium">
+          {% if benchmarks.ai_revenue_p50 %}
+            <div class="metric-compare-row">
+              <span class="text-muted" style="font-size:0.825rem;">Sizning taxminingiz</span>
+              <span class="fw-700" style="font-size:0.875rem;">{{ analysis.target_monthly_revenue|default:0|floatformat:0 }} so'm</span>
+            </div>
+            <div class="metric-compare-row">
+              <span class="text-muted" style="font-size:0.825rem;">AI prognozi (Mediana)</span>
+              <span class="fw-700 text-bank" style="font-size:0.875rem;">{{ benchmarks.ai_revenue_p50|default:0|floatformat:0 }} so'm</span>
+            </div>
+            <div class="metric-compare-row">
+              <span class="text-muted" style="font-size:0.825rem;">Farq</span>
+              <span class="fw-700 {% if benchmarks.revenue_diff_pct > 30 or benchmarks.revenue_diff_pct < -30 %}text-danger{% else %}text-success{% endif %}" style="font-size:0.875rem;">
+                {{ benchmarks.revenue_diff_pct }}%
+              </span>
+            </div>
+            <div class="mt-3 p-2 rounded" style="background:var(--surface-2); border:1px solid var(--border); font-size:0.8rem; line-height:1.5;">
+              {% if benchmarks.revenue_diff_pct > 30 %}
+                <i class="bi bi-exclamation-triangle-fill text-warning me-1"></i>
+                Taxminingiz AI prognozidan ancha yuqori. Ehtiyotkorlik tavsiya etiladi.
+              {% elif benchmarks.revenue_diff_pct < -30 %}
+                <i class="bi bi-info-circle-fill text-bank me-1"></i>
+                Daromad prognozi ehtiyotkorona ko'rinadi.
+              {% else %}
+                <i class="bi bi-check-circle-fill text-success me-1"></i>
+                Taxmin bozor o'rtacha ko'rsatkichlariga mos keladi.
+              {% endif %}
+            </div>
+          {% else %}
+          <div class="block-empty-box" style="min-height:120px;">
+            <div class="block-empty-icon"><i class="bi bi-graph-up"></i></div>
+            <div class="block-empty-label">Validatsiya ma'lumotlari yo'q</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Investment Benchmarking #}
+    <div class="col-md-6">
+      <div class="card-premium h-100" style="margin-bottom:0;">
+        <div class="card-header-premium">
+          <h6><i class="bi bi-piggy-bank me-2 text-bank"></i>Investitsiya Benchmarking</h6>
+        </div>
+        <div class="card-body-premium">
+          {% if analysis.investment_amount %}
+            <div class="metric-compare-row">
+              <span class="text-muted" style="font-size:0.825rem;">Loyiha qiymati</span>
+              <span class="fw-700" style="font-size:0.875rem;">{{ analysis.investment_amount|default:0|floatformat:0 }} so'm</span>
+            </div>
+            <div class="metric-compare-row">
+              <span class="text-muted" style="font-size:0.825rem;">Sohadagi o'rtacha qiymat</span>
+              <span class="fw-700 text-muted" style="font-size:0.875rem;">500,000,000 so'm</span>
+            </div>
+            <div class="metric-compare-row">
+              <span class="text-muted" style="font-size:0.825rem;">Bozorga nisbatan</span>
+              <span class="fw-700 {% if benchmarks.investment_diff_pct > 0 %}text-bank{% else %}text-success{% endif %}" style="font-size:0.875rem;">
+                {% if benchmarks.investment_diff_pct > 0 %}+{% endif %}{{ benchmarks.investment_diff_pct }}%
+              </span>
+            </div>
+            <div class="mt-3" style="font-size:0.8rem; color:var(--text-muted);">
+              <i class="bi bi-info-circle me-1"></i>
+              {{ analysis.district }} tumanidagi {{ analysis.business_type }} loyihalari asosida.
+            </div>
+          {% else %}
+          <div class="block-empty-box" style="min-height:120px;">
+            <div class="block-empty-icon"><i class="bi bi-piggy-bank"></i></div>
+            <div class="block-empty-label">Investitsiya ma'lumotlari yo'q</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ══ 5. SCORE BREAKDOWN + CREDIT TIER ═══════════════════════ #}
+  <div class="section-title mb-3">
+    <i class="bi bi-bar-chart text-bank"></i>Ball Taqsimoti
+  </div>
+  <div class="row g-3 mb-4">
+
+    {# Score Table #}
+    <div class="col-lg-7">
+      <div class="card-premium h-100" style="margin-bottom:0;">
+        <div class="card-header-premium">
+          <h6>Ball taqsimoti (A–E bloklar)</h6>
+        </div>
+        {% if scoring.breakdown %}
+        <div style="overflow-x:auto;">
+          <table class="table-institutional">
+            <thead>
+              <tr>
+                <th>Blok</th>
+                <th>Xom ball</th>
+                <th>Vazn</th>
+                <th class="text-end">Hissa</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for k, v in scoring.breakdown.items %}
+              <tr>
+                <td><span class="fw-700 text-bank">{{ k }}</span></td>
+                <td>{{ v.raw_score|floatformat:1 }}</td>
+                <td><span class="text-muted">{{ v.weight }}</span></td>
+                <td class="text-end fw-700">{{ v.contribution|floatformat:1 }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card-body-premium">
+          <div class="block-empty-box" style="min-height:160px;">
+            <div class="block-empty-icon"><i class="bi bi-table"></i></div>
+            <div class="block-empty-label">Ball taqsimoti mavjud emas</div>
+            <div class="small mt-1" style="font-size:0.75rem;">Tahlil yakunlanishi kutilmoqda</div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Credit Tier #}
+    <div class="col-lg-5">
+      <div class="card-premium h-100" style="margin-bottom:0;">
+        <div class="card-header-premium">
+          <h6>Kredit darajasi va moliyaviy ko'rsatkichlar</h6>
+        </div>
+        <div class="card-body-premium">
+          {% if analysis.credit_tier %}
+          <div class="text-center p-3 mb-3 rounded" style="background:var(--primary-light); border:1px solid var(--primary-border);">
+            <div class="fw-800 text-bank" style="font-size:1.5rem;">{{ analysis.credit_tier }}</div>
+            <div class="text-muted small mt-1">SQB Risklarni baholash darajasi</div>
+          </div>
+          <div class="metric-compare-row">
+            <span class="text-muted" style="font-size:0.825rem;">ROI (12 oy)</span>
+            <span class="fw-700 text-success" style="font-size:0.875rem;">{{ block_d.roi_12mo|default:"—"|floatformat:1 }}%</span>
+          </div>
+          <div class="metric-compare-row">
+            <span class="text-muted" style="font-size:0.825rem;">Oylik daromad (Mediana)</span>
+            <span class="fw-700 text-bank" style="font-size:0.875rem;">{{ block_b.revenue_p50|default:"—"|floatformat:0 }} so'm</span>
+          </div>
+          {% else %}
+          <div class="block-empty-box" style="min-height:200px;">
+            <div class="block-empty-icon"><i class="bi bi-award"></i></div>
+            <div class="block-empty-label">Kredit darajasi aniqlanmagan</div>
+            <div class="small mt-2" style="font-size:0.775rem; color:var(--text-muted);">
+              Tahlil to'liq yakunlanishi kerak
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ══ 6. EXTERNAL WEB CHECKS ══════════════════════════════════ #}
+  {% if external_checks.checks %}
+  <div class="section-title mb-3">
+    <i class="bi bi-shield-check text-bank"></i>Internet Manbalari Tekshiruvi
+  </div>
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6><i class="bi bi-globe me-2 text-bank"></i>Tashqi Manbalar Asosida Tekshiruv</h6>
+      {% if external_checks.summary %}
+      <span class="small text-muted">{{ external_checks.summary }}</span>
+      {% endif %}
+    </div>
+    <div class="card-body-premium">
+      <div class="row g-3">
+        {% for check in external_checks.checks %}
+        <div class="col-md-6">
+          <div class="ext-check-item">
+            <div class="d-flex align-items-start justify-content-between gap-2 mb-2">
+              <div class="fw-700" style="font-size:0.875rem;">{{ check.title }}</div>
+              {% if check.status == 'ok' %}
+                <span class="score-badge score-badge-green flex-shrink-0"><i class="bi bi-check-circle"></i>OK</span>
+              {% elif check.status == 'warn' %}
+                <span class="score-badge score-badge-amber flex-shrink-0"><i class="bi bi-exclamation-triangle"></i>Diqqat</span>
+              {% else %}
+                <span class="score-badge score-badge-red flex-shrink-0"><i class="bi bi-x-circle"></i>Xato</span>
+              {% endif %}
+            </div>
+            <div class="text-muted mb-2" style="font-size:0.825rem; line-height:1.5;">{{ check.feedback }}</div>
+            {% if check.sources %}
+              {% for src in check.sources|slice:":2" %}
+              <a href="{{ src.url }}" target="_blank" rel="noopener"
+                 class="d-flex align-items-center gap-1 text-bank text-decoration-none mb-1 fw-600"
+                 style="font-size:0.775rem;">
+                <i class="bi bi-link-45deg"></i>
+                <span class="text-truncate">{{ src.title }}</span>
+              </a>
+              {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ══ 7. COMPETITOR MAP ════════════════════════════════════════ #}
+  {% if analysis.latitude %}
+  <div class="section-title mb-3">
+    <i class="bi bi-map text-bank"></i>Joylashuv Xaritasi
+  </div>
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6><i class="bi bi-pin-map me-2 text-bank"></i>Joylashuv va Raqobatchilar</h6>
+      <span class="small text-muted">
+        <i class="bi bi-geo-alt me-1"></i>{{ analysis.district }}{% if analysis.address_detail %} — {{ analysis.address_detail }}{% endif %}
+      </span>
+    </div>
+    <div class="p-2">
+      <div id="competitor-map"
+           data-lat="{{ analysis.latitude }}"
+           data-lng="{{ analysis.longitude }}"
+           data-competitors="{{ competitors_json }}"
+           data-anchors="[]"
+           data-mode="competition">
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ══ 8. SQB KREDIT BAHOSI ════════════════════════════════════ #}
+  <div class="section-title mb-3">
+    <i class="bi bi-bank text-bank"></i>SQB Kredit Bahosi
+  </div>
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6><i class="bi bi-bank me-2 text-bank"></i>SQB Maxsus Kredit Tahlili</h6>
+      <span class="score-badge score-badge-blue">{{ analysis.get_business_category_type_display }}</span>
+    </div>
+    <div class="card-body-premium">
+      <div class="row g-4">
+
+        {# — SQB Verdict — #}
+        <div class="col-lg-4">
+          {% if sqb %}
+          <div class="sqb-verdict-box verdict-{{ sqb.verdict_color }}">
+            <div class="text-muted fw-700 mb-1" style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em;">
+              {% if sqb.verdict_color == 'green' %}Muvofiq
+              {% elif sqb.verdict_color == 'yellow' %}Chegaraviy
+              {% elif sqb.verdict_color == 'orange' %}Yuqori Ehtiyot
+              {% else %}Nomuvofiq{% endif %}
+            </div>
+            <div class="fw-700 mb-2" style="font-size:0.875rem;">{{ sqb.verdict }}</div>
+            <div class="fw-800 {% if sqb.verdict_color == 'green' %}text-success{% elif sqb.verdict_color == 'red' %}text-danger{% else %}text-warning{% endif %}"
+                 style="font-size:2.5rem; line-height:1;">
+              {{ sqb.composite_score|floatformat:0 }}<span style="font-size:1rem; font-weight:400; opacity:0.5;">/100</span>
+            </div>
+            <div class="text-muted small mt-1">SQB Kompozit Ball</div>
+            {% if sqb.grace_period_months %}
+            <div class="mt-3 p-2 rounded w-100" style="background:var(--primary-light); border:1px solid var(--primary-border);">
+              <div class="small fw-700 text-bank"><i class="bi bi-calendar-check me-1"></i>Imtiyozli davr</div>
+              <div class="fw-800 text-bank" style="font-size:1.25rem;">{{ sqb.grace_period_months }} oy</div>
+            </div>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="block-empty-box" style="min-height:200px;">
+            <div class="block-empty-icon"><i class="bi bi-bank2"></i></div>
+            <div class="block-empty-label">Kredit bahosi yo'q</div>
+            <div class="small mt-2" style="font-size:0.775rem;">Tahlil yakunlanishi kerak</div>
+          </div>
+          {% endif %}
+        </div>
+
+        {# — CBU 2025 Checklist — #}
+        <div class="col-lg-4">
+          <div class="kpi-label mb-3">
+            <i class="bi bi-clipboard-check me-1"></i>CBU 2025 Talablar
+          </div>
+          {% if sqb %}
+          <div class="cbu-check-row">
+            <span class="cbu-check-status {% if sqb.flags.dsc_ok %}cbu-ok{% else %}cbu-no{% endif %}">
+              {% if sqb.flags.dsc_ok %}OK{% else %}NO{% endif %}
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-600" style="font-size:0.825rem;">DSC nisbati <span class="text-muted">(≥1.25)</span></span>
+                <span class="fw-700 {% if sqb.flags.dsc_ok %}text-success{% else %}text-danger{% endif %}" style="font-size:0.825rem;">{{ sqb.dsc_ratio|floatformat:2 }}</span>
+              </div>
+              <div class="cbu-bar mt-1">
+                <div class="cbu-bar-fill {% if sqb.flags.dsc_ok %}bg-success{% else %}bg-danger{% endif %}"
+                     style="width:{% widthratio sqb.dsc_ratio|default:0 4 100 %}%; min-width:4px; max-width:100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cbu-check-row">
+            <span class="cbu-check-status {% if sqb.flags.collateral_ok %}cbu-ok{% else %}cbu-no{% endif %}">
+              {% if sqb.flags.collateral_ok %}OK{% else %}NO{% endif %}
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-600" style="font-size:0.825rem;">Garov qoplamasi <span class="text-muted">(≥1.25×)</span></span>
+                <span class="fw-700 {% if sqb.flags.collateral_ok %}text-success{% else %}text-danger{% endif %}" style="font-size:0.825rem;">{{ sqb.collateral_coverage|floatformat:2 }}×</span>
+              </div>
+              <div class="cbu-bar mt-1">
+                <div class="cbu-bar-fill {% if sqb.flags.collateral_ok %}bg-success{% else %}bg-danger{% endif %}"
+                     style="width:{% widthratio sqb.collateral_coverage|default:0 3 100 %}%; min-width:4px; max-width:100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cbu-check-row">
+            <span class="cbu-check-status {% if sqb.flags.debt_burden_ok %}cbu-ok{% else %}cbu-no{% endif %}">
+              {% if sqb.flags.debt_burden_ok %}OK{% else %}NO{% endif %}
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-600" style="font-size:0.825rem;">Qarz yuki <span class="text-muted">(≤50%)</span></span>
+                <span class="fw-700 {% if sqb.flags.debt_burden_ok %}text-success{% else %}text-danger{% endif %}" style="font-size:0.825rem;">{{ sqb.debt_burden_pct|floatformat:1 }}%</span>
+              </div>
+              <div class="cbu-bar mt-1">
+                <div class="cbu-bar-fill {% if sqb.flags.debt_burden_ok %}bg-success{% else %}bg-danger{% endif %}"
+                     style="width:{{ sqb.debt_burden_pct|floatformat:0 }}%; min-width:4px; max-width:100%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="cbu-check-row">
+            <span class="cbu-check-status {% if sqb.flags.own_capital_ok %}cbu-ok{% else %}cbu-no{% endif %}">
+              {% if sqb.flags.own_capital_ok %}OK{% else %}NO{% endif %}
+            </span>
+            <div style="flex:1; min-width:0;">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-600" style="font-size:0.825rem;">O'z kapital <span class="text-muted">(≥20%)</span></span>
+                <span class="fw-700 {% if sqb.flags.own_capital_ok %}text-success{% else %}text-danger{% endif %}" style="font-size:0.825rem;">
+                  {% if analysis.investment_amount %}{% widthratio analysis.own_capital|default:0 analysis.investment_amount 100 %}%{% else %}—{% endif %}
+                </span>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <div class="block-empty-box" style="min-height:200px;">
+            <div class="block-empty-icon"><i class="bi bi-clipboard-check"></i></div>
+            <div class="block-empty-label">Talablar tekshirilmagan</div>
+          </div>
+          {% endif %}
+        </div>
+
+        {# — Credit Parameters — #}
+        <div class="col-lg-4">
+          <div class="kpi-label mb-3">
+            <i class="bi bi-table me-1"></i>Kredit Parametrlari
+          </div>
+          <table class="table-institutional">
+            <tbody>
+              <tr>
+                <td class="text-muted" style="font-size:0.825rem;">Kredit miqdori</td>
+                <td class="fw-700 text-end" style="font-size:0.825rem;">{{ analysis.loan_amount|default:0|floatformat:0 }} so'm</td>
+              </tr>
+              <tr>
+                <td class="text-muted" style="font-size:0.825rem;">Foiz stavkasi</td>
+                <td class="fw-700 text-end" style="font-size:0.825rem;">24% yillik</td>
+              </tr>
+              <tr>
+                <td class="text-muted" style="font-size:0.825rem;">Maksimal muddat</td>
+                <td class="fw-700 text-end" style="font-size:0.825rem;">60 oy</td>
+              </tr>
+              <tr>
+                <td class="text-muted" style="font-size:0.825rem;">Kafillik (BKMMK)</td>
+                <td class="fw-700 text-end" style="font-size:0.825rem;">50% gacha</td>
+              </tr>
+              {% if analysis.business_category_type == 'hotel' and category_detail and category_detail.applying_for_subsidy %}
+              <tr>
+                <td class="text-muted" style="font-size:0.825rem;">VM 550/2024</td>
+                <td class="fw-700 text-end text-success" style="font-size:0.825rem;">5.6% kompensatsiya</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+          {% if analysis.sqb_commentary %}
+          <div class="mt-3 p-3 rounded" style="background:var(--surface-2); border:1px solid var(--border); font-size:0.8rem; color:var(--text-secondary); line-height:1.6;">
+            {{ analysis.sqb_commentary|truncatewords:40 }}
+          </div>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div style="height:40px;"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/charts.js' %}"></script>
+<script src="{% static 'js/map.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  initLocationMap('competitor-map', { mode: 'competition' });
+});
+</script>
+{% endblock %}

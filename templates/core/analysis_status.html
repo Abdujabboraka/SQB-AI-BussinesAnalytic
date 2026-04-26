@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block title %}Tahlil jarayoni — BiznesAI{% endblock %}
+{% block content %}
+<div class="container" style="max-width:680px;padding-top:40px">
+  <div class="card-premium p-4 p-md-5 text-center">
+    <!-- Animated Icon -->
+    <div class="mb-4" id="statusIcon">
+      <div style="width:80px;height:80px;background:var(--bank-blue-glass);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:2rem">
+        <span id="statusEmoji"><i class="bi bi-cpu"></i></span>
+      </div>
+    </div>
+
+    <h2 class="fw-800 mb-2" id="statusTitle">AI tahlil qilyapti...</h2>
+    <p class="text-muted mb-4" id="statusSubtitle">
+      {{ analysis.business_type }} — {{ analysis.district }} uchun 5 blok tahlili amalga oshirilmoqda
+    </p>
+
+    <!-- Progress Bar -->
+    <div class="progress-custom mb-2">
+      <div class="progress-bar" id="progressBar" style="width: {{ analysis.progress_pct }}%"></div>
+    </div>
+    <div class="d-flex justify-content-between mb-4">
+      <span class="small text-muted" id="progressText">{{ analysis.progress_pct }}% bajarildi</span>
+      <span class="small text-muted" id="etaText">~30 soniya qoldi</span>
+    </div>
+
+    <!-- Block Status Grid -->
+    <div class="row g-2 mb-4" id="blockGrid">
+      {% for item in block_items %}
+      <div class="col" id="block-{{ item.0 }}">
+        <div style="padding:12px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;" class="block-status-cell">
+          <div style="font-size:1.3rem" id="icon-{{ item.0 }}">⏳</div>
+          <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);margin-top:4px">{{ item.0 }}</div>
+          <div style="font-size:0.7rem;color:var(--text-muted)">{{ item.1 }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if analysis.warning_flag %}
+    <div class="mock-warning mb-3">
+      <i class="bi bi-exclamation-triangle"></i>
+      Demo rejimda ishlayapti — AI API ulanmagan, sintetik ma'lumotlar ishlatiladi
+    </div>
+    {% endif %}
+
+    <!-- Retry/Edit buttons (shown only on failure) -->
+    <div id="retryActions" style="display:none" class="mt-3">
+      <div class="d-flex gap-2 justify-content-center flex-wrap">
+        <form method="post" action="{% url 'analysis_retry' pk=analysis.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-warning fw-600">
+            <i class="bi bi-arrow-clockwise me-2"></i>Qayta urinish
+          </button>
+        </form>
+        <a href="{% url 'analysis_edit' pk=analysis.pk %}" class="btn btn-outline-bank fw-600">
+          <i class="bi bi-pencil me-2"></i>Ma'lumotlarni tahrirlash
+        </a>
+        <a href="{% url 'home' %}" class="btn btn-outline-secondary fw-600">
+          <i class="bi bi-house me-2"></i>Bosh sahifa
+        </a>
+      </div>
+      {% if analysis.warning_message %}
+      <div class="alert alert-danger mt-3 text-start small">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <strong>Xato:</strong> {{ analysis.warning_message }}
+      </div>
+      {% endif %}
+    </div>
+
+    <p class="text-muted small mt-3">
+      <i class="bi bi-arrow-repeat me-1"></i>
+      Sahifa avtomatik yangilanadi. Ketishingiz mumkin — tahlil fonida davom etadi.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const statusApiUrl = "{% url 'analysis_status_api' pk=analysis.pk %}";
+const dashboardUrl = "/analysis/{{ analysis.pk }}/dashboard/";
+
+const blockLabels = {
+  'A': 'Bozor', 'B': 'Talab', 'C': 'Joylashuv', 'D': 'Moliyaviy', 'E': 'Raqobat'
+};
+const blockIcons  = { pending:'In progress', done:'Completed', failed:'Failed' };
+
+function updateBlockGrid(completedBlocks) {
+  for (const [letter] of Object.entries(blockLabels)) {
+    const el = document.getElementById('icon-' + letter);
+    if (!el) continue;
+    if (completedBlocks.includes(letter)) {
+      el.innerHTML = '<i class="bi bi-check-circle text-success"></i>';
+      el.closest('div').style.borderColor = 'var(--green)';
+    }
+  }
+}
+
+let pollInterval;
+function poll() {
+  fetch(statusApiUrl)
+    .then(r => r.json())
+    .then(data => {
+      // Update progress
+      document.getElementById('progressBar').style.width = data.progress_pct + '%';
+      document.getElementById('progressText').textContent = data.progress_pct + '% bajarildi';
+      updateBlockGrid(data.completed_blocks || []);
+
+      if (data.status === 'done') {
+        clearInterval(pollInterval);
+      document.getElementById('statusEmoji').innerHTML = '<i class="bi bi-check-circle"></i>';
+      document.getElementById('statusTitle').textContent = 'Tahlil yakunlandi';
+        document.getElementById('statusSubtitle').textContent = 'Natijalar tayyor. Dashboardga o\'tasiz...';
+        document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('etaText').textContent = '';
+        setTimeout(() => { window.location.href = dashboardUrl; }, 1500);
+      } else if (data.status === 'failed') {
+        clearInterval(pollInterval);
+        document.getElementById('statusEmoji').innerHTML = '<i class="bi bi-exclamation-triangle"></i>';
+        document.getElementById('statusTitle').textContent = 'Xato yuz berdi';
+        document.getElementById('statusSubtitle').textContent = 'Tahlil amalga oshmadi.';
+        document.getElementById('retryActions').style.display = 'block';
+      }
+    })
+    .catch(() => {});
+}
+
+pollInterval = setInterval(poll, 2500);
+poll(); // immediate first call
+</script>
+{% endblock %}

@@ -1,0 +1,131 @@
+{% comment %}
+Reusable block evidence panel.
+Context vars: block_evidence (dict), block_label (str), block_icon (str)
+{% endcomment %}
+{% if block_evidence %}
+<div class="card-premium mb-4" id="block-evidence-panel">
+
+  {# ── Header ── #}
+  <div class="card-header-premium">
+    <h6>
+      <i class="bi bi-search me-1 text-bank"></i>
+      <i class="bi {{ block_icon }} me-1"></i>{{ block_label }} — Internet Manbalar va Taqqoslama
+    </h6>
+    {% if block_evidence.status == 'ok' %}
+      <span class="score-badge score-badge-green">
+        <i class="bi bi-check-circle"></i>Qulay
+      </span>
+    {% elif block_evidence.status == 'warn' %}
+      <span class="score-badge score-badge-amber">
+        <i class="bi bi-exclamation-triangle"></i>O'rtacha
+      </span>
+    {% else %}
+      <span class="score-badge score-badge-red">
+        <i class="bi bi-x-circle"></i>Riskli
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="card-body-premium">
+
+    {% with cmp=block_evidence.comparison %}
+    {% if cmp %}
+
+    {# ── Verdict + Reason ── #}
+    <div class="mb-4 p-3 rounded"
+         style="{% if block_evidence.status == 'ok' %}background:var(--success-light);border:1px solid var(--success-border);
+                {% elif block_evidence.status == 'warn' %}background:var(--warning-light);border:1px solid var(--warning-border);
+                {% else %}background:var(--error-light);border:1px solid var(--error-border);
+                {% endif %}">
+      <div class="fw-700 mb-1" style="font-size:0.9rem;">
+        {% if block_evidence.status == 'ok' %}MUVOFIQ
+        {% elif block_evidence.status == 'warn' %}EHTIYOT
+        {% else %}NOMUVOFIQ{% endif %}:
+        {{ cmp.verdict }}
+      </div>
+      <div class="text-muted" style="font-size:0.825rem; line-height:1.5;">{{ cmp.reason }}</div>
+    </div>
+
+    {# ── Positives & Negatives ── #}
+    <div class="row g-3 mb-4">
+      {% if cmp.positives %}
+      <div class="col-md-6">
+        <div class="kpi-label mb-2" style="color:var(--success);">
+          <i class="bi bi-hand-thumbs-up-fill me-1"></i>Kuchli tomonlar
+        </div>
+        {% for p in cmp.positives %}
+        <div class="d-flex align-items-start gap-2 mb-2 p-2 rounded"
+             style="background:var(--success-light); border:1px solid var(--success-border);">
+          <i class="bi bi-check-circle-fill text-success flex-shrink-0 mt-1" style="font-size:0.75rem;"></i>
+          <span style="font-size:0.825rem; line-height:1.5;">{{ p }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if cmp.negatives %}
+      <div class="col-md-6">
+        <div class="kpi-label mb-2" style="color:var(--warning);">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>Risqlar / Muammolar
+        </div>
+        {% for n in cmp.negatives %}
+        <div class="d-flex align-items-start gap-2 mb-2 p-2 rounded"
+             style="background:var(--warning-light); border:1px solid var(--warning-border);">
+          <i class="bi bi-exclamation-circle-fill text-warning flex-shrink-0 mt-1" style="font-size:0.75rem;"></i>
+          <span style="font-size:0.825rem; line-height:1.5;">{{ n }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    {% endif %}
+    {% endwith %}
+
+    {# ── Sources ── #}
+    {% if block_evidence.sources %}
+    <div class="section-title mb-3">
+      <i class="bi bi-link-45deg text-bank"></i>AI Topgan Tegishli Havolalar
+    </div>
+    <div class="row g-2">
+      {% for src in block_evidence.sources %}
+      <div class="col-md-6">
+        <a href="{{ src.url }}" target="_blank" rel="noopener noreferrer"
+           class="source-link-card d-block text-decoration-none">
+          <div class="d-flex align-items-start gap-2">
+            <div class="flex-shrink-0 mt-1">
+              {% if 'gov.uz' in src.domain or 'lex.uz' in src.domain or 'stat.uz' in src.domain or 'cbu.uz' in src.domain %}
+                <span class="score-badge score-badge-blue" style="font-size:0.62rem; padding:2px 6px;">GOV</span>
+              {% else %}
+                <span class="score-badge score-badge-gray" style="font-size:0.62rem; padding:2px 6px;">WEB</span>
+              {% endif %}
+            </div>
+            <div style="min-width:0;">
+              <div class="fw-700 text-bank text-truncate" style="font-size:0.825rem;" title="{{ src.title }}">
+                {{ src.title|truncatechars:58 }}
+              </div>
+              <div class="text-muted" style="font-size:0.72rem; margin-top:2px;">{{ src.domain }}</div>
+              {% if src.snippet %}
+              <div class="text-muted mt-1" style="font-size:0.775rem; line-height:1.45;">
+                {{ src.snippet|truncatechars:100 }}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% else %}
+    {# Empty sources state #}
+    <div class="block-empty-box" style="min-height:80px;">
+      <div class="block-empty-icon"><i class="bi bi-wifi-off"></i></div>
+      <div class="block-empty-label">Internet manbalar topilmadi</div>
+      <div class="small mt-1" style="font-size:0.75rem;">Serper API orqali qidirish amalga oshmadi</div>
+    </div>
+    {% endif %}
+
+  </div>{# /card-body-premium #}
+</div>
+{% endif %}
