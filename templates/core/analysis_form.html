@@ -196,16 +196,21 @@
             </label>
           </div>
         </div>
-      </div>
-
-      <div class="form-section mt-4">
-        <div class="form-section-title">
+        <div class="form-section-title mt-4">
           <i class="bi bi-pencil-square me-1"></i> Biznesingiz haqida yozing
         </div>
-        <div class="mb-3">
+        <div class="mb-4">
+          <label class="form-label fw-600">{{ form1.business_description.label }}</label>
           {{ form1.business_description }}
           {% if form1.business_description.errors %}<div class="text-danger small mt-1">{{ form1.business_description.errors.0 }}</div>{% endif %}
+          <div class="d-flex justify-content-between mt-1">
+            <div class="progress" style="height:4px;width:100px;background:var(--border)">
+              <div id="charFill" class="progress-bar" style="width:0%"></div>
+            </div>
+            <span id="charCount" class="text-muted" style="font-size:0.7rem">0 belgi</span>
+          </div>
         </div>
+
         <div class="row g-3">
           <div class="col-md-4">
             <label class="form-label fw-600">{{ form1.business_name.label }}</label>
@@ -221,6 +226,9 @@
             <label class="form-label fw-600">{{ form1.mcc_code.label }}</label>
             {{ form1.mcc_code }}
             {% if form1.mcc_code.errors %}<div class="text-danger small mt-1">{{ form1.mcc_code.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-12" id="mccHintBox">
+            <div id="mccHint" class="alert alert-bank-light small py-2 mb-0" style="border-radius:10px; display:none"></div>
           </div>
         </div>
       </div>
@@ -949,7 +957,9 @@ function goStep(n) {
       }
     }
   }
-  if (typeof saveDraft === 'function') saveDraft();
+  if (typeof saveDraft === 'function') {
+      // saveDraft removed per user request
+  }
 }
 
 // ── Char counter ─────────────────────────────────────────────
@@ -1409,82 +1419,6 @@ document.addEventListener('DOMContentLoaded', () => {
     err.classList.add('field-error');
   });
 
-  // ── Form Auto-Save (LocalStorage) ───────────────────────────────
-  const WIZARD_STORAGE_KEY = 'biznesai_wizard_draft';
-  const wizardForm = document.getElementById('wizardForm');
-  
-  function saveDraft() {
-    const formData = new FormData(wizardForm);
-    const draft = { step: currentStep, data: {} };
-    formData.forEach((value, key) => {
-      if (key !== 'csrfmiddlewaretoken') {
-        if (!draft.data[key]) draft.data[key] = value;
-        else {
-          if (!Array.isArray(draft.data[key])) draft.data[key] = [draft.data[key]];
-          draft.data[key].push(value);
-        }
-      }
-    });
-    localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify(draft));
-  }
-
-  function restoreDraft() {
-    // Only restore if this is a fresh form without server-side prefill
-    if (window.location.search.includes('edit_from')) return;
-    
-    const draftJson = localStorage.getItem(WIZARD_STORAGE_KEY);
-    if (!draftJson) return;
-    
-    try {
-      const draft = JSON.parse(draftJson);
-      if (draft.data) {
-        Object.entries(draft.data).forEach(([key, value]) => {
-          const els = wizardForm.querySelectorAll(`[name="${key}"]`);
-          if (!els.length) return;
-          els.forEach(el => {
-            if (el.type === 'checkbox' || el.type === 'radio') {
-              if (Array.isArray(value)) {
-                el.checked = value.includes(el.value);
-              } else {
-                el.checked = (el.value === value);
-              }
-            } else {
-              el.value = value;
-            }
-          });
-        });
-        
-        // Trigger changes for select logic
-        catRadios.forEach(r => { if (r.checked) applyCategoryPanel(); });
-        document.querySelector('[name$="mcc_code"]')?.dispatchEvent(new Event('change'));
-        if (typeof toggleOpHours === 'function') toggleOpHours();
-      }
-      if (draft.step && draft.step !== currentStep) {
-        const targetStepEl = document.querySelector(`#step${draft.step}`);
-        if (!targetStepEl) {
-          localStorage.removeItem(WIZARD_STORAGE_KEY);
-          return; // Step doesn't exist anymore, abort restore
-        }
-        
-        // Go to saved step without validation checks
-        document.querySelector(`#step${currentStep}`).classList.remove('active');
-        document.querySelector(`#nav-step${currentStep}`).classList.remove('active', 'completed');
-        
-        currentStep = draft.step;
-        
-        targetStepEl.classList.add('active');
-        document.querySelectorAll('.step').forEach((el, i) => {
-          const sn = i + 1;
-          el.classList.remove('active', 'completed');
-          if (sn === currentStep) el.classList.add('active');
-          else if (sn < currentStep) el.classList.add('completed');
-        });
-      }
-    } catch (e) {
-      console.warn("Draft restore failed", e);
-    }
-  }
-
   // ── Zalog Logic ───────────────────────────────────────────────────
   const zalogInput = document.getElementById('id_zalog_id');
   const zalogHint = document.getElementById('zalogHint');
@@ -1516,7 +1450,6 @@ document.addEventListener('DOMContentLoaded', () => {
               currentZalogValue = data.total_value;
               enforceLoanLimit();
             } else {
-              // Zalog maydoni ixtiyoriy: topilmasa foydalanuvchini to'smaymiz.
               zalogInput.classList.remove('is-valid', 'is-invalid');
               zalogHint.className = 'text-warning d-block mt-1';
               zalogHint.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Zalog ID topilmadi (ixtiyoriy maydon, davom etishingiz mumkin)';
@@ -1534,19 +1467,19 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Clear previous warnings
     const parent = loanInput.closest('.col-md-6');
-    let warnEl = parent.querySelector('.zalog-warning');
-    if (!warnEl) {
+    let warnEl = parent ? parent.querySelector('.zalog-warning') : null;
+    if (parent && !warnEl) {
       warnEl = document.createElement('small');
       warnEl.className = 'text-danger d-block mt-1 zalog-warning fw-600';
       parent.appendChild(warnEl);
     }
     
     if (currentRequested > maxLoan) {
-      warnEl.innerHTML = `<i class="bi bi-shield-lock me-1"></i>Garov asosida ruxsat etilgan maksimal miqdor: ${maxLoan.toLocaleString('uz')} UZS`;
+      if (warnEl) warnEl.innerHTML = `<i class="bi bi-shield-lock me-1"></i>Garov asosida ruxsat etilgan maksimal miqdor: ${maxLoan.toLocaleString('uz')} UZS`;
       loanInput.value = maxLoan;
       loanInput.classList.add('is-invalid');
       setTimeout(() => loanInput.classList.remove('is-invalid'), 1500);
-    } else {
+    } else if (warnEl) {
       warnEl.innerHTML = '';
     }
   }
@@ -1556,14 +1489,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loanInput.addEventListener('change', enforceLoanLimit);
   }
 
-  // Bind change events to save draft
-  wizardForm.addEventListener('change', saveDraft);
-  wizardForm.addEventListener('input', saveDraft);
-
-  // Restore on load
-  restoreDraft();
-  
-  // Re-check Zalog on load if filled
   if (zalogInput && zalogInput.value) {
     zalogInput.dispatchEvent(new Event('input'));
   }

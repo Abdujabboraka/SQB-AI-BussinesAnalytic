@@ -121,13 +121,7 @@
                     <i class="bi bi-hourglass-split me-1"></i>Kutish
                   </a>
                 {% else %}
-                  <form method="post" action="{% url 'analysis_retry' pk=a.pk %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-secondary"
-                            title="Qayta boshlash" data-bs-toggle="tooltip">
-                      <i class="bi bi-arrow-clockwise"></i>
-                    </button>
-                  </form>
+
                   <a href="{% url 'analysis_edit' pk=a.pk %}"
                      class="btn btn-sm btn-outline-bank"
                      title="Tahrirlash va qayta yuborish" data-bs-toggle="tooltip">

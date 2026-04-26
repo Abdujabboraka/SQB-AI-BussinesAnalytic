@@ -65,6 +65,7 @@ class Step1Form(forms.ModelForm):
             'business_name': forms.TextInput(attrs={
                 'class': 'form-control',
                 'title': "Biznesingiz nomi",
+                'required': 'required',
                 'placeholder': "Masalan: 'Osh Markazi' yoki 'Yulduz Kafe'",
             }),
             'business_type': forms.TextInput(attrs={
