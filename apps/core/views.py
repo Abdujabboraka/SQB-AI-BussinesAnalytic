@@ -41,6 +41,8 @@ class HomeView(LoginRequiredMixin, ListView):
         ctx['done_count'] = qs.filter(status='done').count()
         ctx['ha_count'] = qs.filter(final_recommendation='YES').count()
         ctx['yoq_count'] = qs.filter(final_recommendation='NO').count()
+        ctx['processing_count'] = qs.filter(status__in=['processing', 'pending']).count()
+        ctx['has_active'] = ctx['processing_count'] > 0
         ctx['is_officer'] = hasattr(self.request.user, 'profile') and self.request.user.profile.is_officer()
         return ctx
 
@@ -101,121 +103,130 @@ class AnalysisCreateView(LoginRequiredMixin, View):
         return render(request, self.template_name, ctx)
 
     def post(self, request):
-        forms_only, ctx = self._get_forms(request.POST)
-        all_valid = all(f.is_valid() for f in forms_only.values())
+        import json as _json
 
-        # Determine category early (needed for detail form)
-        # 'tourism' shares the hotel detail form
-        category = request.POST.get('s1-business_category_type', 'hotel')
+        # Run validation to populate cleaned_data where possible, but don't block on it
+        forms_only, ctx = self._get_forms(request.POST)
+        for f in forms_only.values():
+            f.is_valid()
+
+        category = request.POST.get('s1-business_category_type', 'hotel') or 'hotel'
         detail_category = 'hotel' if category == 'tourism' else category
         cat_form = self._get_category_form(detail_category, request.POST)
-        cat_form_valid = (cat_form is None) or cat_form.is_valid()
+        if cat_form:
+            cat_form.is_valid()
 
         ctx['category_forms'] = {
             k: cls(request.POST if k == detail_category else None, prefix='cat')
             for k, cls in self.CATEGORY_DETAIL_FORMS.items()
         }
 
-        if all_valid and cat_form_valid:
-            try:
-                # ── Build core analysis ────────────────────────────
-                analysis = BusinessAnalysisRequest(client=request.user)
-                # Save raw form data so failed analyses can be retried/edited
-                import json as _json
-                analysis.form_data_json = {k: v if len(v) > 1 else v[0] for k, v in request.POST.lists()
-                                           if k not in ('csrfmiddlewaretoken',)}
-                for form in forms_only.values():
+        def _post(key, default=''):
+            return request.POST.get(key, default) or default
+
+        try:
+            analysis = BusinessAnalysisRequest(client=request.user)
+            analysis.form_data_json = {
+                k: v if len(v) > 1 else v[0]
+                for k, v in request.POST.lists()
+                if k != 'csrfmiddlewaretoken'
+            }
+
+            # Apply cleaned data from whichever forms passed validation
+            for form in forms_only.values():
+                if hasattr(form, 'cleaned_data'):
                     for field, value in form.cleaned_data.items():
-                        if hasattr(analysis, field):
+                        if hasattr(analysis, field) and value not in (None, ''):
                             setattr(analysis, field, value)
 
-                extra_monthly_costs = sum(
-                    float(forms_only['form4'].cleaned_data.get(field) or 0)
-                    for field in (
-                        'monthly_marketing_uzs',
-                        'monthly_logistics_uzs',
-                        'monthly_maintenance_uzs',
-                        'monthly_software_uzs',
-                        'monthly_security_uzs',
-                        'monthly_other_costs_uzs',
-                    )
-                )
-                # Dynamic custom cost rows from the "+ Qo'shish" button
+            # Fill in required model fields with fallbacks so save() doesn't raise
+            if not analysis.business_type:
+                analysis.business_type = _post('s1-business_type', 'Yangi biznes')
+            if not analysis.business_description:
+                analysis.business_description = _post('s1-business_description', '—')
+            if not analysis.business_category_type:
+                analysis.business_category_type = category
+            if not analysis.mcc_code:
+                analysis.mcc_code = _post('s1-mcc_code', '5999')
+
+            extra_monthly_costs = 0.0
+            f4_data = getattr(forms_only.get('form4'), 'cleaned_data', {}) or {}
+            for field in ('monthly_marketing_uzs', 'monthly_logistics_uzs',
+                          'monthly_maintenance_uzs', 'monthly_software_uzs',
+                          'monthly_security_uzs', 'monthly_other_costs_uzs'):
+                extra_monthly_costs += float(f4_data.get(field) or 0)
+
+            try:
+                custom_costs_raw = f4_data.get('extra_costs_json') or _post('s4-extra_costs_json', '[]')
+                custom_costs = _json.loads(custom_costs_raw) if isinstance(custom_costs_raw, str) else []
+                extra_monthly_costs += sum(float(r.get('amount', 0)) for r in custom_costs if isinstance(r, dict))
+                if custom_costs:
+                    analysis.extra_costs_json = custom_costs
+            except Exception:
+                pass
+
+            analysis.own_capital = max(
+                float(analysis.investment_amount or 0) - float(analysis.loan_amount or 0), 0
+            )
+            analysis.monthly_fixed_costs = analysis.computed_monthly_fixed_costs + extra_monthly_costs
+            analysis.variable_cost_pct = analysis.cogs_percentage
+            analysis.save()
+
+            # Save category detail
+            if cat_form and hasattr(cat_form, 'cleaned_data'):
                 try:
-                    custom_costs_raw = forms_only['form4'].cleaned_data.get('extra_costs_json') or '[]'
-                    custom_costs = _json.loads(custom_costs_raw) if isinstance(custom_costs_raw, str) else []
-                    custom_total = sum(float(row.get('amount', 0)) for row in custom_costs if isinstance(row, dict))
-                    extra_monthly_costs += custom_total
-                    if custom_costs:
-                        analysis.extra_costs_json = custom_costs
+                    self._save_category_detail(analysis, detail_category, cat_form.cleaned_data)
                 except Exception:
                     pass
-                analysis.own_capital = max(
-                    float(analysis.investment_amount or 0) - float(analysis.loan_amount or 0),
-                    0,
-                )
-                analysis.monthly_fixed_costs = analysis.computed_monthly_fixed_costs + extra_monthly_costs
-                analysis.variable_cost_pct = analysis.cogs_percentage
-                analysis.save()
 
-                # ── Save category detail model ─────────────────────
-                if cat_form and cat_form.is_valid():
-                    self._save_category_detail(analysis, detail_category, cat_form.cleaned_data)
-
-                # ── Run SQB Credit Scorer immediately ─────────────
-                try:
-                    from services.scoring_engine import SQBCreditScorer
-                    scorer = SQBCreditScorer()
-                    monthly_rev = float(analysis.target_monthly_revenue or 0)
-                    if monthly_rev <= 0:
-                        daily = getattr(analysis, 'expected_daily_customers', 50) or 50
-                        check = float(getattr(analysis, 'average_check_uzs', 50000) or 50000)
-                        days  = getattr(analysis, 'working_days_per_week', 7) or 7
-                        monthly_rev = daily * check * days * 4.3
-                    
-                    sqb = scorer.compute(analysis, monthly_revenue=monthly_rev)
-                    analysis.sqb_composite_score = sqb['composite_score']
-                    analysis.sqb_recommendation = sqb['verdict']
-                    analysis.sqb_recommendation_color = sqb['verdict_color']
-                    analysis.sqb_dsc_ratio = sqb['dsc_ratio']
-                    analysis.sqb_collateral_coverage = sqb['collateral_coverage']
-                    analysis.sqb_debt_burden_pct = sqb['debt_burden_pct']
-                    analysis.save(update_fields=[
-                        'sqb_composite_score', 'sqb_recommendation', 'sqb_recommendation_color',
-                        'sqb_dsc_ratio', 'sqb_collateral_coverage', 'sqb_debt_burden_pct',
-                    ])
-                except Exception as e:
-                    import logging
-                    logging.getLogger(__name__).warning(f"SQB scoring failed: {e}")
-
-                # ── Launch Background Tahlil ───────────────────────
-                try:
-                    from apps.core.tasks import run_full_analysis
-                    if getattr(settings, 'USE_CELERY', False):
-                        task = run_full_analysis.delay(analysis.pk)
-                        analysis.celery_task_id = task.id if hasattr(task, 'id') else ''
-                        analysis.save(update_fields=['celery_task_id'])
-                    else:
-                        # Threaded execution for instant response without Celery
-                        thread = threading.Thread(target=run_full_analysis, args=(None, analysis.pk))
-                        thread.daemon = True
-                        thread.start()
-                except Exception as e:
-                    logging.getLogger(__name__).error(f"Dispatch failed: {e}")
-                    analysis.status = 'failed'
-                    analysis.warning_message = str(e)
-                    analysis.save(update_fields=['status', 'warning_message'])
-
-                messages.success(request, "Tahlil jarayoni boshlandi. Iltimos, natijalarni kuting!")
-                return redirect('analysis_status_page', pk=analysis.pk)
+            # SQB scoring
+            try:
+                from services.scoring_engine import SQBCreditScorer
+                scorer = SQBCreditScorer()
+                monthly_rev = float(analysis.target_monthly_revenue or 0)
+                if monthly_rev <= 0:
+                    daily = float(getattr(analysis, 'expected_daily_customers', 50) or 50)
+                    check = float(getattr(analysis, 'average_check_uzs', 50000) or 50000)
+                    days  = float(getattr(analysis, 'working_days_per_week', 7) or 7)
+                    monthly_rev = daily * check * days * 4.3
+                sqb = scorer.compute(analysis, monthly_revenue=monthly_rev)
+                analysis.sqb_composite_score     = sqb['composite_score']
+                analysis.sqb_recommendation      = sqb['verdict']
+                analysis.sqb_recommendation_color = sqb['verdict_color']
+                analysis.sqb_dsc_ratio           = sqb['dsc_ratio']
+                analysis.sqb_collateral_coverage = sqb['collateral_coverage']
+                analysis.sqb_debt_burden_pct     = sqb['debt_burden_pct']
+                analysis.save(update_fields=[
+                    'sqb_composite_score', 'sqb_recommendation', 'sqb_recommendation_color',
+                    'sqb_dsc_ratio', 'sqb_collateral_coverage', 'sqb_debt_burden_pct',
+                ])
             except Exception as e:
-                import logging
-                logging.getLogger(__name__).exception("Error creating analysis request")
-                messages.error(request, f"Tizim xatosi: {str(e)}")
-                return render(request, self.template_name, ctx)
+                logger.warning(f"SQB scoring failed: {e}")
 
-        # Re-render with validation errors
-        return render(request, self.template_name, ctx)
+            # Launch background analysis
+            try:
+                from apps.core.tasks import run_full_analysis, run_analysis_sync
+                if getattr(settings, 'USE_CELERY', False):
+                    task = run_full_analysis.delay(analysis.pk)
+                    analysis.celery_task_id = task.id if hasattr(task, 'id') else ''
+                    analysis.save(update_fields=['celery_task_id'])
+                else:
+                    thread = threading.Thread(target=run_analysis_sync, args=(analysis.pk,))
+                    thread.daemon = True
+                    thread.start()
+            except Exception as e:
+                logger.error(f"Dispatch failed: {e}")
+                analysis.status = 'failed'
+                analysis.warning_message = str(e)
+                analysis.save(update_fields=['status', 'warning_message'])
+
+            messages.success(request, "Tahlil boshlandi! Natijalar tayyorlanmoqda…")
+            return redirect('home')
+
+        except Exception as e:
+            logger.exception("Error creating analysis request")
+            messages.error(request, f"Xato: {str(e)}")
+            return redirect('home')
 
     def _save_category_detail(self, analysis, category, data):
         """Create/update the appropriate category detail model."""

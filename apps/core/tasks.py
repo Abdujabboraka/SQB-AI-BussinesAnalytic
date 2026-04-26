@@ -10,6 +10,49 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+def run_analysis_sync(request_id: int):
+    """
+    Sequential (non-Celery) runner used when USE_CELERY=False.
+    Runs A → B → C → D → E → final_decision in a background thread.
+    """
+    from apps.core.models import BusinessAnalysisRequest
+    try:
+        req = BusinessAnalysisRequest.objects.get(pk=request_id)
+        req.status = 'processing'
+        req.progress_pct = 5
+        req.completed_blocks = []
+        req.save(update_fields=['status', 'progress_pct', 'completed_blocks'])
+
+        task_block_a.apply(args=(request_id,))
+        task_block_b.apply(args=(request_id,))
+        task_block_c.apply(args=(request_id,))
+        task_block_d.apply(args=(None, request_id))
+        task_block_e.apply(args=(None, request_id))
+        task_final_decision.apply(args=(None, request_id))
+
+        cat = getattr(req, 'business_category_type', '')
+        cat_task_map = {
+            'hotel':        task_category_hotel,
+            'construction': task_category_construction,
+            'textile':      task_category_textile,
+            'trade':        task_category_trade,
+        }
+        cat_task = cat_task_map.get(cat)
+        if cat_task:
+            cat_task.apply(args=(request_id,))
+
+    except Exception as exc:
+        logger.exception(f"Sync analysis failed for request {request_id}")
+        try:
+            from apps.core.models import BusinessAnalysisRequest
+            req = BusinessAnalysisRequest.objects.get(pk=request_id)
+            req.status = 'failed'
+            req.warning_message = str(exc)
+            req.save(update_fields=['status', 'warning_message'])
+        except Exception:
+            pass
+
+
 def _get_request(request_id: int):
     from apps.core.models import BusinessAnalysisRequest
     return BusinessAnalysisRequest.objects.get(pk=request_id)

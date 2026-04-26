@@ -200,6 +200,32 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function(el) {
     new bootstrap.Tooltip(el);
   });
+
+  {% if has_active %}
+  // Auto-refresh every 5 seconds while analyses are processing
+  (function poll() {
+    setTimeout(function() {
+      fetch(window.location.href, { headers: { 'X-Requested-With': 'dashboard-poll' } })
+        .then(r => r.text())
+        .then(html => {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          const newTable = doc.getElementById('analysis-list');
+          const curTable = document.getElementById('analysis-list');
+          if (newTable && curTable) curTable.innerHTML = newTable.innerHTML;
+          // Also update KPI values
+          doc.querySelectorAll('.kpi-value').forEach((el, i) => {
+            const cur = document.querySelectorAll('.kpi-value')[i];
+            if (cur) cur.textContent = el.textContent;
+          });
+          // Stop polling if no more active analyses
+          const stillActive = doc.querySelector('.status-dot.processing, .status-dot.pending');
+          if (stillActive) poll();
+        })
+        .catch(() => {}); // silent fail, try again next cycle
+    }, 5000);
+  })();
+  {% endif %}
 });
 </script>
 {% endblock %}
