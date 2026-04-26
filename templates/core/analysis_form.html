@@ -65,6 +65,10 @@
 .ai-health-banner.warn  { background: #FFFBEB; border: 1px solid #FEF3C7; color: #92400E; }
 .ai-health-banner.error { background: #FEF2F2; border: 1px solid #FEE2E2; color: #991B1B; }
 
+/* Step validation */
+.is-invalid { border-color: #dc3545 !important; box-shadow: 0 0 0 2px rgba(220,53,69,0.15) !important; }
+.step-error-banner { border-radius: var(--radius-sm); font-size: 0.875rem; }
+
 /* Cost rows */
 .custom-cost-row {
   display: flex; gap: 12px; align-items: center;
@@ -192,6 +196,7 @@
             </label>
           </div>
         </div>
+      </div>
 
       <div class="form-section mt-4">
         <div class="form-section-title">
@@ -231,10 +236,51 @@
             {{ form2.planned_opening_date }}
             {% if form2.planned_opening_date.errors %}<div class="text-danger small mt-1">{{ form2.planned_opening_date.errors.0 }}</div>{% endif %}
           </div>
-          <div class="col-md-8">
-             <label class="form-label">{{ form2.operating_hours_start.label }}</label>
-             {{ form2.operating_hours_start }}
-             {% if form2.operating_hours_start.errors %}<div class="text-danger small mt-1">{{ form2.operating_hours_start.errors.0 }}</div>{% endif %}
+          <div class="col-md-4">
+            <div class="form-check form-switch mt-4">
+              {{ form2.is_24_7 }}
+              <label class="form-check-label ms-2 fw-600">{{ form2.is_24_7.label }}</label>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">{{ form2.working_days_per_week.label }}</label>
+            {{ form2.working_days_per_week }}
+            {% if form2.working_days_per_week.errors %}<div class="text-danger small mt-1">{{ form2.working_days_per_week.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-3 op-time-col">
+            <label class="form-label">{{ form2.operating_hours_start.label }}</label>
+            {{ form2.operating_hours_start }}
+            {% if form2.operating_hours_start.errors %}<div class="text-danger small mt-1">{{ form2.operating_hours_start.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-3 op-time-col">
+            <label class="form-label">{{ form2.operating_hours_end.label }}</label>
+            {{ form2.operating_hours_end }}
+            {% if form2.operating_hours_end.errors %}<div class="text-danger small mt-1">{{ form2.operating_hours_end.errors.0 }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">
+          <i class="bi bi-people me-1"></i> <span id="step2_customersTitle">Kunlik mijozlar va o'rtacha chek</span>
+        </div>
+        <p class="text-muted small mb-3" id="step2_hint"></p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-600" id="step2_customersLabel">{{ form2.expected_daily_customers.label }}</label>
+            <div class="input-group">
+              {{ form2.expected_daily_customers }}
+              <span class="input-group-text" id="step2_customersUnit">kishi/kun</span>
+            </div>
+            {% if form2.expected_daily_customers.errors %}<div class="text-danger small mt-1">{{ form2.expected_daily_customers.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-600" id="step2_checkLabel">{{ form2.average_check_uzs.label }}</label>
+            <div class="input-group">
+              {{ form2.average_check_uzs }}
+              <span class="input-group-text" id="step2_checkUnit">UZS</span>
+            </div>
+            {% if form2.average_check_uzs.errors %}<div class="text-danger small mt-1">{{ form2.average_check_uzs.errors.0 }}</div>{% endif %}
           </div>
         </div>
         <div class="financial-total mt-4">
@@ -242,6 +288,25 @@
           <div class="fw-800 fs-5 text-primary" id="revenueEstimate">— so'm/oy</div>
         </div>
       </div>
+
+      <div class="form-section">
+        <div class="form-section-title">
+          <i class="bi bi-sun me-1"></i> Mavsumiylik
+        </div>
+        <div class="row g-3">
+          <div class="col-md-12">
+            <div class="form-check form-switch">
+              {{ form2.has_seasonal_dependency }}
+              <label class="form-check-label ms-2 fw-600">{{ form2.has_seasonal_dependency.label }}</label>
+            </div>
+          </div>
+          <div class="col-12" id="seasonalNotesBox" style="display:none">
+            <label class="form-label fw-600">{{ form2.seasonal_notes.label }}</label>
+            {{ form2.seasonal_notes }}
+          </div>
+        </div>
+      </div>
+
       <div class="d-flex justify-content-between gap-2 mb-4">
         <button type="button" class="btn btn-outline-secondary" onclick="goStep(1)">Orqaga</button>
         <button type="button" class="btn btn-primary px-5" onclick="goStep(3)">Davom etish <i class="bi bi-arrow-right ms-2"></i></button>
@@ -777,8 +842,46 @@ document.addEventListener('DOMContentLoaded', () => {
 const TOTAL = 4;
 let currentStep = 1;
 
+function clearStepErrors(stepEl) {
+  stepEl.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+  stepEl.querySelectorAll('.field-error-msg').forEach(el => el.remove());
+  const banner = stepEl.querySelector('.step-error-banner');
+  if (banner) banner.remove();
+}
+
+function markFieldError(input) {
+  input.classList.add('is-invalid');
+  if (!input.nextElementSibling || !input.nextElementSibling.classList.contains('field-error-msg')) {
+    const msg = document.createElement('div');
+    msg.className = 'field-error-msg text-danger small mt-1';
+    msg.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>' + (input.validationMessage || "Bu maydon to'ldirilishi shart");
+    input.insertAdjacentElement('afterend', msg);
+  }
+  input.addEventListener('input', function h() { input.classList.remove('is-invalid'); input.nextElementSibling?.classList.contains('field-error-msg') && input.nextElementSibling.remove(); input.removeEventListener('input', h); }, { once: true });
+}
+
+function validateStep(stepEl) {
+  clearStepErrors(stepEl);
+  const inputs = stepEl.querySelectorAll('input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])');
+  let invalid = [];
+  for (const input of inputs) {
+    const panel = input.closest('.category-panel, .bank-fields-section');
+    if (panel && panel.style.display === 'none') continue;
+    if (!input.checkValidity()) { markFieldError(input); invalid.push(input); }
+  }
+  if (invalid.length) {
+    const banner = document.createElement('div');
+    banner.className = 'step-error-banner alert alert-danger d-flex align-items-center gap-2 mb-3 py-2';
+    banner.innerHTML = `<i class="bi bi-exclamation-triangle-fill fs-5"></i><span>${invalid.length} ta maydon to'ldirilmagan. Iltimos, qizil maydonlarni to'ldiring.</span>`;
+    stepEl.prepend(banner);
+    invalid[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return false;
+  }
+  return true;
+}
+
 function goStep(n) {
-    if (n > currentStep) {
+  if (n > currentStep) {
     if (currentStep === 3) {
       const mapPicker = document.getElementById('map-picker');
       const coordHint = document.getElementById('coord-hint');
@@ -792,12 +895,7 @@ function goStep(n) {
       }
     }
     const currentStepEl = document.getElementById(`step${currentStep}`);
-    const inputs = currentStepEl.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled])');
-    for (let input of inputs) {
-      const parentPanel = input.closest('.category-panel');
-      if (parentPanel && parentPanel.style.display === 'none') continue;
-      if (!input.checkValidity()) { input.reportValidity(); return; }
-    }
+    if (!validateStep(currentStepEl)) return;
   }
   document.querySelector(`#step${currentStep}`).classList.remove('active');
   document.querySelector(`#nav-step${currentStep}`).classList.remove('active');
