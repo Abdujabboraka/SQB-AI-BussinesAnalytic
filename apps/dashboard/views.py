@@ -184,21 +184,53 @@ class PDFExportView(LoginRequiredMixin, View):
     def _build_reportlab_pdf(self, analysis, block_a, block_b, block_c, block_d, block_e, sqb_result):
         """
         Windows-friendly PDF generator (no GTK/system dependencies).
+        Uses standard fonts but handles potential Unicode issues.
         """
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
         from reportlab.pdfgen import canvas
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import os
 
         buffer = BytesIO()
         c = canvas.Canvas(buffer, pagesize=A4)
-        width, height = A4
+        
+        # Try to use a Unicode-capable font if available on Windows
+        font_name = "Helvetica"
+        bold_font = "Helvetica-Bold"
+        
+        system_fonts = [
+            ('Arial', 'C:/Windows/Fonts/arial.ttf'),
+            ('Arial-Bold', 'C:/Windows/Fonts/arialbd.ttf'),
+            ('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
+        ]
+        
+        registered_unicode = False
+        for name, path in system_fonts:
+            if os.path.exists(path):
+                try:
+                    pdfmetrics.registerFont(TTFont(name, path))
+                    if 'Bold' in name: bold_font = name
+                    else: font_name = name
+                    registered_unicode = True
+                except: pass
 
+        width, height = A4
         y = height - 20 * mm
 
         def line(text, size=10, bold=False, step=6):
             nonlocal y
-            c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
-            c.drawString(18 * mm, y, str(text))
+            f = bold_font if bold else font_name
+            c.setFont(f, size)
+            # Basic non-unicode fallback: if not registered unicode font, 
+            # reportlab might crash on non-latin1. We'll try/except the drawString.
+            try:
+                c.drawString(18 * mm, y, str(text))
+            except UnicodeEncodeError:
+                # Fallback: strip non-latin1 characters if using standard Helvetica
+                clean_text = str(text).encode('latin-1', 'replace').decode('latin-1')
+                c.drawString(18 * mm, y, clean_text)
             y -= step * mm
 
         line("SQB Bank - BiznesAI Kredit Tahlil Hisoboti", size=14, bold=True, step=8)
@@ -211,10 +243,10 @@ class PDFExportView(LoginRequiredMixin, View):
 
         y -= 2 * mm
         line("Moliyaviy ko'rsatkichlar", bold=True)
-        line(f"Investitsiya: {analysis.investment_amount:,.0f} so'm")
-        line(f"Kredit: {analysis.loan_amount:,.0f} so'm")
-        line(f"O'z kapitali: {analysis.own_capital:,.0f} so'm")
-        line(f"Oylik doimiy xarajat: {analysis.monthly_fixed_costs:,.0f} so'm")
+        line(f"Investitsiya: {float(analysis.investment_amount or 0):,.0f} so'm")
+        line(f"Kredit: {float(analysis.loan_amount or 0):,.0f} so'm")
+        line(f"O'z kapitali: {float(analysis.own_capital or 0):,.0f} so'm")
+        line(f"Oylik doimiy xarajat: {float(analysis.monthly_fixed_costs or 0):,.0f} so'm")
 
         y -= 2 * mm
         line("Blok natijalari", bold=True)
@@ -321,8 +353,10 @@ class PDFExportView(LoginRequiredMixin, View):
                 logger.error("ReportLab PDF generation failed: %s", rb_exc)
                 return HttpResponse(f"PDF yaratishda xato: {rb_exc}", status=500)
 
+        from django.utils.encoding import escape_uri_path
         response = HttpResponse(pdf, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{fname}"'
+        # Standard-compliant header for non-ASCII filenames
+        response['Content-Disposition'] = f"attachment; filename*=UTF-8''{escape_uri_path(fname)}"
         return response
 
 
