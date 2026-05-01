@@ -77,4 +77,4 @@ Unlike generic tools, BiznesAI applies specialized logical frameworks based on t
    *Note: For background AI tasks, make sure to configure and run your Celery worker and Redis server.*
 
 ---
-*Built with ❤️ for the SQB Hackathon.*
+
