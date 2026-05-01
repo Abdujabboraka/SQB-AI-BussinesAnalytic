@@ -10,6 +10,280 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+# ══════════════════════════════════════════════════════════════
+# COMPARISON ENGINE — user assumptions vs AI reality
+# ══════════════════════════════════════════════════════════════
+
+def _compare(user_val: float, ai_val: float, label: str) -> dict:
+    """Return a structured diff between user assumption and AI estimate."""
+    if ai_val and ai_val != 0:
+        diff_pct = ((user_val - ai_val) / abs(ai_val)) * 100
+    else:
+        diff_pct = 0.0
+    abs_diff = abs(diff_pct)
+    risk = 'low' if abs_diff <= 20 else ('medium' if abs_diff <= 50 else 'high')
+    return {
+        'label':    label,
+        'user':     round(user_val),
+        'ai':       round(ai_val),
+        'diff_pct': round(diff_pct, 1),
+        'risk':     risk,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+# VALIDATION RULES — per block, returns issues + error count
+# ══════════════════════════════════════════════════════════════
+
+def _validate_block_a(block_a) -> dict:
+    """
+    Block A (Market Analysis) validation rules.
+    Thresholds:
+      • saturation_index > 0.80  → warning (> 0.95 → error)
+      • niche_opportunity_score < 30 → error
+      • som_uzs < 2 B UZS       → warning
+      • gap_score < 25           → warning
+    """
+    issues = []
+
+    if block_a.saturation_index > 0.95:
+        issues.append({'level': 'error', 'code': 'EXTREME_SATURATION',
+            'message': f"Bozor haddan tashqari to'yingan "
+                       f"({block_a.saturation_index:.0%}). Kirish imkonsiz."})
+    elif block_a.saturation_index > 0.80:
+        issues.append({'level': 'warning', 'code': 'HIGH_SATURATION',
+            'message': f"Bozor to'yingan ({block_a.saturation_index:.0%}). "
+                       f"Raqobat juda yuqori — differensiatsiya zarur."})
+
+    if block_a.niche_opportunity_score < 30:
+        issues.append({'level': 'error', 'code': 'LOW_OPPORTUNITY',
+            'message': f"Niche imkoniyati bali juda past "
+                       f"({block_a.niche_opportunity_score:.0f}/100). "
+                       f"Bozorga kirish qiyin."})
+
+    if block_a.som_uzs < 2_000_000_000:
+        issues.append({'level': 'warning', 'code': 'LOW_SOM',
+            'message': f"SOM juda kichik "
+                       f"({block_a.som_uzs / 1e9:.1f} mlrd so'm). "
+                       f"Maqsadli bozor yetarli daromad ta'minlamasligi mumkin."})
+
+    if block_a.gap_score < 25:
+        issues.append({'level': 'warning', 'code': 'LOW_GAP_SCORE',
+            'message': "GAP tahlili: bozorda bo'sh joy topilmadi. "
+                       "Mavjud raqobatchilar barcha segmentlarni qoplagan."})
+
+    return {
+        'issues':      issues,
+        'error_count': sum(1 for i in issues if i['level'] == 'error'),
+        'warn_count':  sum(1 for i in issues if i['level'] == 'warning'),
+    }
+
+
+def _validate_block_b(block_b) -> dict:
+    """
+    Block B (Demand Forecast) validation rules.
+    Thresholds:
+      • demand_score < 30         → error
+      • demand_score < 45         → warning
+      • declining 12-mo trend     → warning
+      • very wide confidence band → warning
+    """
+    issues = []
+
+    if block_b.demand_score < 30:
+        issues.append({'level': 'error', 'code': 'VERY_LOW_DEMAND',
+            'message': f"Talab juda past (ball: {block_b.demand_score:.0f}/100). "
+                       f"Prognoz salbiy yoki kritik darajada past."})
+    elif block_b.demand_score < 45:
+        issues.append({'level': 'warning', 'code': 'LOW_DEMAND',
+            'message': f"Talab o'rtachadan past (ball: {block_b.demand_score:.0f}/100). "
+                       f"Daromad maqsad ko'rsatkichlardan pastda bo'lishi mumkin."})
+
+    forecast = block_b.monthly_forecast_12 or []
+    if len(forecast) >= 6:
+        early_avg = sum(forecast[:3]) / 3
+        late_avg  = sum(forecast[-3:]) / 3
+        if early_avg > 0 and late_avg < early_avg * 0.85:
+            issues.append({'level': 'warning', 'code': 'DECLINING_TREND',
+                'message': "12 oylik prognozda pasayish trendi kuzatildi. "
+                           "Daromad vaqt o'tishi bilan kamayishi kutilmoqda."})
+
+    p10 = block_b.revenue_p10 or 0
+    p50 = block_b.revenue_p50 or 1
+    if p10 > 0 and p50 / p10 > 4:
+        issues.append({'level': 'warning', 'code': 'HIGH_UNCERTAINTY',
+            'message': "Daromad prognozida katta noaniqlik (P90/P10 > 4x). "
+                       "Moliyaviy reja konservativ versiyaga asoslanishi kerak."})
+
+    return {
+        'issues':      issues,
+        'error_count': sum(1 for i in issues if i['level'] == 'error'),
+        'warn_count':  sum(1 for i in issues if i['level'] == 'warning'),
+    }
+
+
+def _validate_block_c(block_c) -> dict:
+    """
+    Block C (Location Intelligence) validation rules.
+    Thresholds:
+      • location_score < 35       → error
+      • location_score < 50       → warning
+      • competitors_300m >= 5     → error
+      • anchor_effect_score < 25  → warning
+    """
+    issues = []
+
+    if block_c.location_score < 35:
+        issues.append({'level': 'error', 'code': 'VERY_LOW_LOCATION',
+            'message': f"Joylashuv bali juda past ({block_c.location_score:.0f}/100). "
+                       f"Trafik va mavjudlik jiddiy muammo."})
+    elif block_c.location_score < 50:
+        issues.append({'level': 'warning', 'code': 'LOW_LOCATION',
+            'message': f"Joylashuv bali o'rtachadan past ({block_c.location_score:.0f}/100). "
+                       f"Qo'shimcha marketing strategiyasi zarur."})
+
+    n_300 = len(block_c.competitors_300m or [])
+    if n_300 >= 5:
+        issues.append({'level': 'error', 'code': 'TOO_MANY_NEARBY_COMPS',
+            'message': f"300 metr ichida {n_300} ta to'g'ridan-to'g'ri raqobatchi — "
+                       f"juda yuqori raqobat zichligi."})
+
+    if block_c.anchor_effect_score < 25:
+        issues.append({'level': 'warning', 'code': 'LOW_ANCHOR_EFFECT',
+            'message': "Yaqin atrofda yirik attraktorlar (bozor, maktab, kasalxona) topilmadi. "
+                       "Spontan mijozlar kamroq bo'ladi."})
+
+    return {
+        'issues':      issues,
+        'error_count': sum(1 for i in issues if i['level'] == 'error'),
+        'warn_count':  sum(1 for i in issues if i['level'] == 'warning'),
+    }
+
+
+def _validate_block_d(block_d) -> dict:
+    """
+    Block D (Financial Viability) validation rules.
+    Thresholds:
+      • mc_success_probability < 40  → error
+      • mc_success_probability < 55  → warning
+      • breakeven_months > 48        → error
+      • breakeven_months > 36        → warning
+      • roi_12mo < 0                 → error
+      • ltv_cac_ratio < 1.0         → warning
+      • last 6 months of CF all < 0  → error
+    """
+    issues = []
+
+    if block_d.mc_success_probability < 40:
+        issues.append({'level': 'error', 'code': 'LOW_SUCCESS_PROB',
+            'message': f"Monte Carlo muvaffaqiyat ehtimoli "
+                       f"{block_d.mc_success_probability:.0f}% (< 40%). "
+                       f"Ko'p simulyatsiyalarda zarar kutilmoqda."})
+    elif block_d.mc_success_probability < 55:
+        issues.append({'level': 'warning', 'code': 'MARGINAL_SUCCESS_PROB',
+            'message': f"Muvaffaqiyat ehtimoli {block_d.mc_success_probability:.0f}% — "
+                       f"chegaraviy daraja. Xarajatlarni kamaytirish tavsiya etiladi."})
+
+    if block_d.breakeven_months > 48:
+        issues.append({'level': 'error', 'code': 'VERY_LONG_BEP',
+            'message': f"Tannarx qoplash muddati {block_d.breakeven_months:.0f} oy (> 48). "
+                       f"Investitsiya qaytimi juda uzoq."})
+    elif block_d.breakeven_months > 36:
+        issues.append({'level': 'warning', 'code': 'LONG_BEP',
+            'message': f"Tannarx qoplash muddati {block_d.breakeven_months:.0f} oy (> 36). "
+                       f"SQB kredit muddatidan oshishi mumkin."})
+
+    if block_d.roi_12mo < 0:
+        issues.append({'level': 'error', 'code': 'NEGATIVE_ROI',
+            'message': f"12 oylik ROI salbiy ({block_d.roi_12mo:.1f}%). "
+                       f"Birinchi yilda zarar kutilmoqda."})
+
+    ltv_cac = block_d.ltv_cac_ratio or 0
+    if 0 < ltv_cac < 1.0:
+        issues.append({'level': 'warning', 'code': 'POOR_LTV_CAC',
+            'message': f"LTV/CAC = {ltv_cac:.2f} (1 dan past). "
+                       f"Mijoz jalb qilish xarajati uning umr boylik qiymatidan yuqori."})
+
+    cf = block_d.cash_flow_monthly_24 or []
+    if len(cf) >= 6 and all(v < 0 for v in cf[-6:]):
+        issues.append({'level': 'error', 'code': 'PERSISTENT_NEGATIVE_CF',
+            'message': "Oxirgi 6 oylik pul oqimi doimo salbiy. "
+                       "Loyiha 24 oy ichida daromadga chiqmaydi."})
+
+    return {
+        'issues':      issues,
+        'error_count': sum(1 for i in issues if i['level'] == 'error'),
+        'warn_count':  sum(1 for i in issues if i['level'] == 'warning'),
+    }
+
+
+def _validate_block_e(block_e) -> dict:
+    """
+    Block E (Competition & Risk) validation rules.
+    Thresholds:
+      • market_risk_score > 75  → error
+      • market_risk_score > 60  → warning
+      • district_churn_rate > 35 → warning
+      • competitors_300m >= 6   → error
+    """
+    issues = []
+
+    if block_e.market_risk_score > 75:
+        issues.append({'level': 'error', 'code': 'VERY_HIGH_MARKET_RISK',
+            'message': f"Bozor xavf bahosi {block_e.market_risk_score:.0f}/100 — "
+                       f"juda xavfli. Ko'plab raqobatchilar va yuqori yopilish ehtimoli."})
+    elif block_e.market_risk_score > 60:
+        issues.append({'level': 'warning', 'code': 'HIGH_MARKET_RISK',
+            'message': f"Bozor xavf bahosi {block_e.market_risk_score:.0f}/100 — "
+                       f"yuqori. Xavf boshqaruv strategiyasi zarur."})
+
+    if block_e.district_churn_rate > 35:
+        issues.append({'level': 'warning', 'code': 'HIGH_CHURN_RATE',
+            'message': f"Tumandagi yillik yopilish koeffitsienti "
+                       f"{block_e.district_churn_rate:.0f}% — yuqori. "
+                       f"Ushbu tuman uchun biznes baquvvatligi pastroq."})
+
+    n_300 = len(block_e.competitors_300m or [])
+    if n_300 >= 6:
+        issues.append({'level': 'error', 'code': 'SEVERE_COMPETITION',
+            'message': f"300 metr ichida {n_300} ta raqobatchi — "
+                       f"jiddiy raqobat. Bozorga kirish juda qiyin."})
+
+    return {
+        'issues':      issues,
+        'error_count': sum(1 for i in issues if i['level'] == 'error'),
+        'warn_count':  sum(1 for i in issues if i['level'] == 'warning'),
+    }
+
+
+def _save_validation(block_obj, validation: dict):
+    """Attach validation results to a block's raw_data and persist."""
+    try:
+        raw = block_obj.raw_data or {}
+        raw['validation'] = validation
+        block_obj.raw_data = raw
+        block_obj.save(update_fields=['raw_data'])
+    except Exception as exc:
+        logger.warning(f"Failed to save validation for {block_obj}: {exc}")
+
+
+def _collect_all_validations(block_a, block_b, block_c, block_d, block_e) -> dict:
+    """Aggregate all validation issues from every block for the final decision."""
+    all_errors, all_warnings = [], []
+    for block, letter in [(block_a, 'A'), (block_b, 'B'),
+                          (block_c, 'C'), (block_d, 'D'), (block_e, 'E')]:
+        if not block:
+            continue
+        raw = getattr(block, 'raw_data', None) or {}
+        for issue in (raw.get('validation') or {}).get('issues', []):
+            entry = f"[{letter}] {issue['message']}"
+            if issue['level'] == 'error':
+                all_errors.append(entry)
+            else:
+                all_warnings.append(entry)
+    return {'errors': all_errors, 'warnings': all_warnings}
+
+
 def run_analysis_sync(request_id: int):
     """
     Sequential (non-Celery) runner used when USE_CELERY=False.
@@ -162,6 +436,13 @@ def task_block_a(self, request_id: int):
     )
 
     is_mock = bool(result.get('is_mock', not bool(gemini.model)))
+
+    # Comparison: user revenue assumption vs AI-derived SOM monthly equivalent
+    user_monthly_rev = float(getattr(req, 'target_monthly_revenue', 0) or 0)
+    som_monthly = int(result.get('som_uzs', 4_000_000_000)) / 12
+    comparison = [_compare(user_monthly_rev, som_monthly,
+                           "Maqsadli oylik daromad vs AI SOM/12")]
+
     block_a, _ = BlockAResult.objects.update_or_create(
         request=req,
         defaults={
@@ -172,10 +453,18 @@ def task_block_a(self, request_id: int):
             'gap_score': float(result.get('gap_score', 50.0)),
             'niche_opportunity_score': float(result.get('niche_opportunity_score', 50.0)),
             'ai_commentary': result.get('commentary', ''),
-            'raw_data': result,
+            'raw_data': {**result, 'comparison': comparison},
             'is_mock': is_mock,
         }
     )
+
+    # Validation
+    validation = _validate_block_a(block_a)
+    _save_validation(block_a, validation)
+    if validation['error_count']:
+        logger.warning(f"Block A validation errors for request {request_id}: "
+                       f"{[i['code'] for i in validation['issues'] if i['level']=='error']}")
+
     _mark_block_done(req, 'A', 15)
     logger.info(f"Block A done for request {request_id}")
     return request_id
@@ -242,7 +531,11 @@ def task_block_b(self, request_id: int):
     commentary = ai_result.get('commentary', '')
     is_mock = bool(ai_result.get('is_mock', not bool(gemini.model)))
 
-    BlockBResult.objects.update_or_create(
+    # Comparison: user revenue assumption vs AI forecast P50
+    user_monthly_rev = float(getattr(req, 'target_monthly_revenue', 0) or 0)
+    comparison = [_compare(user_monthly_rev, p50, "Maqsadli oylik daromad vs AI P50")]
+
+    block_b, _ = BlockBResult.objects.update_or_create(
         request=req,
         defaults={
             'monthly_forecast_12': [int(v) for v in forecast_12],
@@ -262,10 +555,19 @@ def task_block_b(self, request_id: int):
                 'base_revenue': revenues[-1] if revenues else 0,
                 'synthetic_demand_score': round(synthetic_demand_score, 1),
                 'ai_review': ai_result,
+                'comparison': comparison,
             },
             'is_mock': is_mock,
         }
     )
+
+    # Validation
+    validation = _validate_block_b(block_b)
+    _save_validation(block_b, validation)
+    if validation['error_count']:
+        logger.warning(f"Block B validation errors for request {request_id}: "
+                       f"{[i['code'] for i in validation['issues'] if i['level']=='error']}")
+
     _mark_block_done(req, 'B', 15)
     logger.info(f"Block B done for request {request_id} (mock={is_mock})")
     return request_id
@@ -329,6 +631,27 @@ def task_block_c(self, request_id: int):
     from services.huggingface_service import HuggingFaceService
 
     req = _get_request(request_id)
+
+    NON_LOCATION_TYPES = ('textile', 'construction')
+    if getattr(req, 'business_category_type', '') in NON_LOCATION_TYPES:
+        BlockCResult.objects.update_or_create(
+            request=req,
+            defaults={
+                'location_score': 0,
+                'is_mock': True,
+                'raw_data': {'skipped': True, 'reason': 'non_location_business'},
+                'ai_commentary': (
+                    "Bu biznes turi uchun joylashuv tahlili o'tkazilmaydi. "
+                    "Tekstil ishlab chiqarish va qurilish korxonalari uchun "
+                    "passajirlik oqimi va yaqin atrofdagi raqobatchilar tahlili "
+                    "amaliy ahamiyatga ega emas."
+                ),
+            }
+        )
+        _mark_block_done(req, 'C', 55)
+        logger.info(f"Block C skipped (non-location business) for request {request_id}")
+        return request_id
+
     mcc_svc = MCCDataService()
     gemini = AIDispatcher()
     hf = HuggingFaceService()
@@ -370,23 +693,39 @@ def task_block_c(self, request_id: int):
     daily = [0.65, 0.85, 0.90, 0.95, 1.10, 1.35, 1.20]
 
     is_mock = bool(result.get('is_mock', not bool(gemini.model)))
-    BlockCResult.objects.update_or_create(
+
+    # Comparison: user stated foot_traffic vs AI isochrone demand
+    user_ft_map = {'very_high': 15000, 'high': 8000, 'medium': 4000, 'low': 1500}
+    user_iso10 = user_ft_map.get(getattr(req, 'foot_traffic', 'medium'), 4000)
+    ai_iso10   = int(result.get('isochrone_demand_10min', 12000))
+    comparison = [_compare(user_iso10, ai_iso10,
+                           "Foydalanuvchi trafik bahosi vs AI 10-daqiqa izoхrona")]
+
+    block_c, _ = BlockCResult.objects.update_or_create(
         request=req,
         defaults={
             'location_score': float(result.get('location_score', 60.0)),
             'hourly_footfall': hourly,
             'daily_footfall': daily,
             'isochrone_demand_5min': int(result.get('isochrone_demand_5min', 3500)),
-            'isochrone_demand_10min': int(result.get('isochrone_demand_10min', 12000)),
+            'isochrone_demand_10min': ai_iso10,
             'anchor_businesses': anchors[:3],
             'anchor_effect_score': float(result.get('anchor_effect_score', 45.0)),
             'competitors_300m': comps_300m,
             'competitors_1km': comps_1km,
             'ai_commentary': result.get('commentary', ''),
-            'raw_data': result,
+            'raw_data': {**result, 'comparison': comparison},
             'is_mock': is_mock,
         }
     )
+
+    # Validation
+    validation = _validate_block_c(block_c)
+    _save_validation(block_c, validation)
+    if validation['error_count']:
+        logger.warning(f"Block C validation errors for request {request_id}: "
+                       f"{[i['code'] for i in validation['issues'] if i['level']=='error']}")
+
     _mark_block_done(req, 'C', 15)
     logger.info(f"Block C done for request {request_id}")
     return request_id
@@ -549,7 +888,17 @@ def task_block_d(self, prev_results, request_id: int):
     commentary = ai_result.get('commentary', '')
     is_mock = bool(ai_result.get('is_mock', not bool(gemini.model)))
 
-    BlockDResult.objects.update_or_create(
+    # Comparison: user target revenue vs AI revenue P50, user investment vs annual BEP revenue
+    user_target = float(getattr(req, 'target_monthly_revenue', 0) or 0)
+    bep_annual  = int(max(0, bep_revenue)) * 12
+    comparison  = [
+        _compare(user_target, monthly_revenue_p50,
+                 "Maqsadli oylik daromad vs AI Monte Carlo P50"),
+        _compare(investment, bep_annual,
+                 "Investitsiya vs yillik tannarx qoplash daromadi"),
+    ]
+
+    block_d, _ = BlockDResult.objects.update_or_create(
         request=req,
         defaults={
             'breakeven_months': round(min(bep_months, 999.0), 1),
@@ -572,10 +921,19 @@ def task_block_d(self, prev_results, request_id: int):
                 'fixed_costs': fixed_costs,
                 'synthetic_viability_score': round(synthetic_viability_score, 1),
                 'ai_review': ai_result,
+                'comparison': comparison,
             },
             'is_mock': is_mock,
         }
     )
+
+    # Validation
+    validation = _validate_block_d(block_d)
+    _save_validation(block_d, validation)
+    if validation['error_count']:
+        logger.warning(f"Block D validation errors for request {request_id}: "
+                       f"{[i['code'] for i in validation['issues'] if i['level']=='error']}")
+
     _mark_block_done(req, 'D', 15)
     logger.info(f"Block D done for request {request_id} (mock={is_mock})")
     return request_id
@@ -656,7 +1014,19 @@ def task_block_e(self, prev_result, request_id: int):
     market_risk_inv = round(100.0 - market_risk, 1)
 
     is_mock = bool(result.get('is_mock', not bool(gemini.model)))
-    BlockEResult.objects.update_or_create(
+
+    # Comparison: user-stated nearby competitor count vs OSM-sourced 300m count
+    n_300_ai = len(comps_300m)
+    _known_raw = getattr(req, 'known_competitors', '') or ''
+    try:
+        n_300_user = int(_known_raw)
+    except (ValueError, TypeError):
+        # TextField: count non-empty lines as competitor entries
+        n_300_user = len([l for l in _known_raw.splitlines() if l.strip()])
+    comparison = [_compare(n_300_user, n_300_ai,
+                           "Foydalanuvchi raqobatchilar soni vs AI OSM 300m")]
+
+    block_e, _ = BlockEResult.objects.update_or_create(
         request=req,
         defaults={
             'competitors_300m': comps_300m,
@@ -667,10 +1037,18 @@ def task_block_e(self, prev_result, request_id: int):
             'district_churn_rate': churn_rate,
             'recommendation_notes': result.get('recommendation_notes', ''),
             'ai_commentary': result.get('commentary', ''),
-            'raw_data': result,
+            'raw_data': {**result, 'comparison': comparison},
             'is_mock': is_mock,
         }
     )
+
+    # Validation
+    validation = _validate_block_e(block_e)
+    _save_validation(block_e, validation)
+    if validation['error_count']:
+        logger.warning(f"Block E validation errors for request {request_id}: "
+                       f"{[i['code'] for i in validation['issues'] if i['level']=='error']}")
+
     _mark_block_done(req, 'E', 15)
     logger.info(f"Block E done for request {request_id}")
     return request_id
@@ -722,10 +1100,51 @@ def task_final_decision(self, prev_result, request_id: int):
     if recommendation not in ('YES', 'NO', 'CAUTION'):
         recommendation = scoring_result['recommendation']
 
+    # ── Validation-based recommendation capping ──
+    all_val = _collect_all_validations(block_a, block_b, block_c, block_d, block_e)
+    error_count = len(all_val['errors'])
+    warning_flag = False
+    warning_message = ''
+
+    if error_count >= 3:
+        # Critical: too many hard failures across blocks → force NO
+        if recommendation != 'NO':
+            logger.warning(f"Capping recommendation from {recommendation} to NO "
+                           f"({error_count} block errors) for request {request_id}")
+            recommendation = 'NO'
+        warning_flag = True
+        warning_message = (
+            f"Tahlil natijalari {error_count} ta jiddiy muammoni aniqladi. "
+            f"Kredit tavsiyasi avtomatik ravishda 'NO'ga o'zgartirildi.\n"
+            + "\n".join(f"• {e}" for e in all_val['errors'][:5])
+        )
+    elif error_count >= 1 and recommendation == 'YES':
+        # At least one hard error but score would say YES → downgrade to CAUTION
+        logger.warning(f"Downgrading recommendation from YES to CAUTION "
+                       f"({error_count} block errors) for request {request_id}")
+        recommendation = 'CAUTION'
+        warning_flag = True
+        warning_message = (
+            f"Tahlil {error_count} ta jiddiy muammoni aniqladi. "
+            f"Kredit tavsiyasi 'EHTIYOT'ga o'zgartirildi.\n"
+            + "\n".join(f"• {e}" for e in all_val['errors'])
+        )
+        if all_val['warnings']:
+            warning_message += "\nOgohlantirishlar:\n" + "\n".join(
+                f"• {w}" for w in all_val['warnings'][:3]
+            )
+    elif all_val['warnings']:
+        warning_flag = True
+        warning_message = "Ogohlantirishlar:\n" + "\n".join(
+            f"• {w}" for w in all_val['warnings'][:5]
+        )
+
     req.final_score = composite_score
     req.final_recommendation = recommendation
     req.final_commentary = final.get('commentary', '')
     req.credit_tier = final.get('credit_tier', scoring_result['credit_tier'])
+    req.warning_flag = warning_flag
+    req.warning_message = warning_message
     req.status = 'done'
     req.progress_pct = 100
 
@@ -743,7 +1162,8 @@ def task_final_decision(self, prev_result, request_id: int):
 
     req.save(update_fields=[
         'final_score', 'final_recommendation', 'final_commentary',
-        'credit_tier', 'status', 'progress_pct',
+        'credit_tier', 'warning_flag', 'warning_message',
+        'status', 'progress_pct',
         'external_checks', 'external_checks_updated_at'
     ])
 

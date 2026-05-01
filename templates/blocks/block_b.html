@@ -240,6 +240,25 @@
     </div>
   </div>
 
+  {# ══ P10/P50/P90 RANGE CHART ════════════════════════════════ #}
+  {% if block.revenue_p50 %}
+  <div class="section-title mb-3">
+    <i class="bi bi-reception-4 text-bank"></i>Daromad Scenariylar Taqqoslama
+  </div>
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6>Pessimistik · Mediana · Optimistik — oylik daromad</h6>
+      <span class="score-badge score-badge-gray">P10 / P50 / P90</span>
+    </div>
+    <div class="card-body-premium">
+      <div id="apexPRange" style="min-height:220px;"></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ══ COMPARISON PANEL ═════════════════════════════════════════ #}
+  {% include 'blocks/_comparison_panel.html' with comparison_json=comparison_json block_label="B Blok — Talab" %}
+
   {# ══ AI COMMENTARY ═══════════════════════════════════════════ #}
   {% if block.ai_commentary %}
   <div class="section-title mb-3">
@@ -267,10 +286,42 @@
 {% block extra_js %}
 <script src="{% static 'js/charts.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   {% if block and block.revenue_p50 %}
-  initForecastChart('forecastChart', {{ forecast_labels }}, {{ forecast_p50 }}, {{ forecast_low }}, {{ forecast_high }});
-  initWeeklyChart('weeklyChart', {{ weekly_labels }}, {{ weekly_data }});
+  initForecastChart('forecastChart', {{ forecast_labels|safe }}, {{ forecast_p50|safe }}, {{ forecast_low|safe }}, {{ forecast_high|safe }});
+  initWeeklyChart('weeklyChart', {{ weekly_labels|safe }}, {{ weekly_data|safe }});
+
+  /* ApexCharts — P10/P50/P90 grouped bar comparison */
+  var ps = {{ p_series_json|safe }};
+  function fmtM(v) {
+    if (v >= 1e9) return (v/1e9).toFixed(2) + ' mlrd';
+    if (v >= 1e6) return (v/1e6).toFixed(1) + ' mln';
+    return (v/1e3).toFixed(0) + 'K';
+  }
+  try { new ApexCharts(document.getElementById('apexPRange'), {
+    chart: { type: 'bar', height: 220, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    plotOptions: { bar: { horizontal: false, columnWidth: '42%', borderRadius: 6, distributed: true } },
+    series: [{ name: 'Oylik daromad', data: [ps.p10, ps.p50, ps.p90] }],
+    xaxis: {
+      categories: ['Pessimistik (P10)', 'Mediana (P50)', 'Optimistik (P90)'],
+      labels: { style: { fontSize: '11px' } }
+    },
+    yaxis: { labels: { formatter: fmtM } },
+    colors: ['#DC2626', '#1B4FD8', '#16A34A'],
+    legend: { show: false },
+    dataLabels: { enabled: true, formatter: fmtM, style: { fontSize: '11px', fontWeight: 700 } },
+    grid: { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 },
+    tooltip: { y: { formatter: function(v) { return fmtM(v) + ' so\'m/oy'; } } },
+    annotations: {
+      yaxis: [{
+        y: ps.p50,
+        borderColor: '#1B4FD8',
+        borderWidth: 2,
+        strokeDashArray: 5,
+        label: { text: 'Mediana', style: { fontSize: '10px', color: '#1B4FD8', background: '#EFF6FF' } }
+      }]
+    }
+  }).render(); } catch(e) { console.error('apexPRange:', e); }
   {% endif %}
 });
 </script>

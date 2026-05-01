@@ -93,13 +93,25 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 300  # 5 minutes per task
 
 # AI Services
-GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+GEMINI_API_KEY        = config('GEMINI_API_KEY', default='')
+GEMINI_MODEL          = config('GEMINI_MODEL', default='gemini-2.0-flash')
 HUGGINGFACE_API_TOKEN = config('HUGGINGFACE_API_TOKEN', default='')
-OPENAI_API_KEY = config('OPENAI_API_KEY', default=config('openai_api_key', default=''))
-ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
-GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.0-flash')
-SERPER_API_URL = config('SERPER_API_URL', default='https://google.serper.dev')
-SERPER_API_KEY = config('SERPER_API_KEY', default='')
+OPENAI_API_KEY        = config('OPENAI_API_KEY', default='') or config('openai_api_key', default='')
+ANTHROPIC_API_KEY     = config('ANTHROPIC_API_KEY', default='')
+SERPER_API_URL        = config('SERPER_API_URL', default='https://google.serper.dev')
+SERPER_API_KEY        = config('SERPER_API_KEY', default='')
+
+# Extended providers — add key to .env and they appear automatically
+AICC_API_KEY       = config('AICC_API_KEY',  default='')
+AICC_URL           = config('AICC_URL',       default='https://api.ai.cc/v1')
+AICC_MODEL         = config('AICC_MODEL',     default='gpt-4o-mini')
+
+OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='') or config('openrouter_ai_api_key', default='')
+OPENROUTER_URL     = config('OPENROUTER_URL',     default='https://openrouter.ai/api/v1')
+OPENROUTER_MODEL   = config('OPENROUTER_MODEL',   default='openai/gpt-4o-mini')
+
+APIFREELLM_API_KEY = config('APIFREELLM_API_KEY', default='') or config('apifreellm_API_KEY', default='')
+APIFREELLM_URL     = config('APIFREELLM_URL',     default='') or config('apifreellm_url', default='https://apifreellm.com/api/v1/chat')
 
 # App-level constants
 ANALYSIS_BLOCK_WEIGHTS = {

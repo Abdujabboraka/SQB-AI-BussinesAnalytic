@@ -19,4 +19,11 @@ class BlockDView(LoginRequiredMixin, View):
             ctx['mc_distribution'] = json.dumps([int(v) for v in block.mc_profit_distribution])
             ctx['cashflow_labels'] = json.dumps([f"Oy {i+1}" for i in range(24)])
             ctx['cashflow_data'] = json.dumps([int(v) for v in block.cash_flow_monthly_24])
+            ctx['comparison_json'] = json.dumps((block.raw_data or {}).get('comparison', []))
+            ctx['radial_json'] = json.dumps({
+                'bep_score': min(100, max(0, round(100 - (block.breakeven_months / 48) * 100, 1))),
+                'roi_score': min(100, max(0, round(block.roi_12mo, 1))),
+                'mc_score': round(block.mc_success_probability, 1),
+                'viability': round(block.viability_score, 1),
+            })
         return render(request, self.template_name, ctx)

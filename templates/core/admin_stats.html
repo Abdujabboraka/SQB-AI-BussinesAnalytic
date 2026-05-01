@@ -1,0 +1,841 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Admin Statistikasi — BiznesAI{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Layout ─────────────────────────────────────── */
+.stats-page { padding-bottom: 60px; }
+
+/* ── Section header ──────────────────────────────── */
+.stats-section-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.stats-section-title::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(90deg, var(--primary-border) 0%, transparent 100%);
+}
+
+/* ── KPI card ────────────────────────────────────── */
+.kpi-stat {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+.kpi-stat:hover {
+  box-shadow: 0 6px 20px rgba(30,58,138,.1);
+  transform: translateY(-2px);
+}
+.kpi-stat::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.kpi-blue::before   { background: #1B4FD8; }
+.kpi-green::before  { background: #16A34A; }
+.kpi-red::before    { background: #DC2626; }
+.kpi-amber::before  { background: #D97706; }
+.kpi-purple::before { background: #7C3AED; }
+.kpi-cyan::before   { background: #0891B2; }
+
+.kpi-stat .kpi-ico {
+  width: 42px; height: 42px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+  margin-bottom: 14px;
+}
+.kpi-blue   .kpi-ico { background: #EFF6FF; color: #1B4FD8; }
+.kpi-green  .kpi-ico { background: #F0FDF4; color: #16A34A; }
+.kpi-red    .kpi-ico { background: #FEF2F2; color: #DC2626; }
+.kpi-amber  .kpi-ico { background: #FFFBEB; color: #D97706; }
+.kpi-purple .kpi-ico { background: #F5F3FF; color: #7C3AED; }
+.kpi-cyan   .kpi-ico { background: #ECFEFF; color: #0891B2; }
+
+.kpi-stat .kpi-num {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.kpi-stat .kpi-lbl {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.kpi-stat .kpi-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+/* ── Chart card ──────────────────────────────────── */
+.chart-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  height: 100%;
+}
+.chart-card-head {
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%);
+  border-bottom: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.chart-card-head h6 {
+  font-size: 0.825rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-card-body { padding: 18px 20px; }
+
+/* ── Recent table ────────────────────────────────── */
+.stats-table { width: 100%; border-collapse: collapse; font-size: 0.825rem; }
+.stats-table th {
+  background: #F8FAFC;
+  padding: 9px 14px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.stats-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+.stats-table tbody tr:last-child td { border-bottom: none; }
+.stats-table tbody tr:hover td { background: #F8FAFC; }
+
+/* ── Inline progress bar ─────────────────────────── */
+.mini-bar-wrap { width: 70px; height: 5px; background: var(--border); border-radius: 3px; display: inline-block; vertical-align: middle; }
+.mini-bar { height: 100%; border-radius: 3px; }
+
+/* ── Rate badge ──────────────────────────────────── */
+.rate-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.rate-green  { background: #F0FDF4; color: #166534; border: 1px solid #BBF7D0; }
+.rate-amber  { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
+.rate-red    { background: #FEF2F2; color: #991B1B; border: 1px solid #FEE2E2; }
+.rate-gray   { background: #F1F5F9; color: #475569; border: 1px solid #E2E8F0; }
+
+/* ── Top user row ────────────────────────────────── */
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.user-row:last-child { border-bottom: none; }
+.user-avatar-sm {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 stats-page">
+
+  <!-- ══ PAGE HEADER ════════════════════════════════════════ -->
+  <div class="d-flex align-items-start justify-content-between mb-4" style="padding-top:12px">
+    <div>
+      <nav aria-label="breadcrumb" class="mb-1">
+        <ol class="breadcrumb small mb-0">
+          <li class="breadcrumb-item"><a href="{% url 'home' %}" class="text-bank">Bosh sahifa</a></li>
+          <li class="breadcrumb-item active">Admin Statistikasi</li>
+        </ol>
+      </nav>
+      <h1 class="h4 fw-800 mb-1">
+        <i class="bi bi-graph-up me-2 text-bank"></i>Admin Statistikasi
+      </h1>
+      <p class="text-muted mb-0" style="font-size:.875rem">
+        Barcha foydalanuvchilar va tahlillar bo'yicha umumiy ko'rsatkichlar
+      </p>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+      <span class="score-badge score-badge-blue">
+        <i class="bi bi-clock me-1"></i>Real-vaqt
+      </span>
+      <a href="{% url 'home' %}" class="btn btn-outline-bank btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Ortga
+      </a>
+    </div>
+  </div>
+
+  <!-- ══ ROW 1: KPI CARDS ═══════════════════════════════════ -->
+  <div class="stats-section-title"><i class="bi bi-speedometer2"></i>Asosiy Ko'rsatkichlar</div>
+  <div class="row g-3 mb-4">
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="kpi-stat kpi-blue">
+        <div class="kpi-ico"><i class="bi bi-file-earmark-bar-graph"></i></div>
+        <div class="kpi-num">{{ total }}</div>
+        <div class="kpi-lbl">Jami Tahlillar</div>
+        <div class="kpi-sub"><i class="bi bi-calendar3 me-1"></i>Bugun: {{ analyses_today }}</div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="kpi-stat kpi-purple">
+        <div class="kpi-ico"><i class="bi bi-people"></i></div>
+        <div class="kpi-num">{{ total_users }}</div>
+        <div class="kpi-lbl">Foydalanuvchilar</div>
+        <div class="kpi-sub"><i class="bi bi-person-plus me-1"></i>Yangi (30 kun): {{ users_this_month }}</div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="kpi-stat kpi-green">
+        <div class="kpi-ico"><i class="bi bi-check-circle"></i></div>
+        <div class="kpi-num">{{ done_count }}</div>
+        <div class="kpi-lbl">Yakunlangan</div>
+        <div class="kpi-sub">Yakunlanish: {{ completion_rate }}%</div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="kpi-stat kpi-green">
+        <div class="kpi-ico"><i class="bi bi-hand-thumbs-up"></i></div>
+        <div class="kpi-num">{{ yes_count }}</div>
+        <div class="kpi-lbl">Tasdiqlangan (YES)</div>
+        <div class="kpi-sub">Muvaffaqiyat: {{ success_rate }}%</div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="kpi-stat kpi-amber">
+        <div class="kpi-ico"><i class="bi bi-hourglass-split"></i></div>
+        <div class="kpi-num">{{ active_count }}</div>
+        <div class="kpi-lbl">Aktiv Jarayonda</div>
+        <div class="kpi-sub"><i class="bi bi-calendar-week me-1"></i>Hafta: {{ analyses_this_week }}</div>
+      </div>
+    </div>
+
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="kpi-stat kpi-red">
+        <div class="kpi-ico"><i class="bi bi-x-circle"></i></div>
+        <div class="kpi-num">{{ failed_count }}</div>
+        <div class="kpi-lbl">Xato / Rad Etilgan</div>
+        <div class="kpi-sub">NO: {{ no_count }} · EHTIYOT: {{ caution_count }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROW 2: SCORE SUMMARY CARDS ════════════════════════ -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="kpi-stat kpi-blue" style="padding:16px 20px">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i class="bi bi-bar-chart-fill text-bank"></i>
+          <span class="kpi-lbl" style="margin:0">O'rtacha Final Ball</span>
+        </div>
+        <div class="kpi-num" style="font-size:1.7rem">{{ avg_final_score }}<span class="fs-6 fw-500 text-muted">/100</span></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="kpi-stat kpi-cyan" style="padding:16px 20px">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i class="bi bi-bank2 text-info"></i>
+          <span class="kpi-lbl" style="margin:0">SQB Composite Ball</span>
+        </div>
+        <div class="kpi-num" style="font-size:1.7rem">{{ avg_sqb_score }}<span class="fs-6 fw-500 text-muted">/100</span></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="kpi-stat kpi-green" style="padding:16px 20px">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i class="bi bi-dice-5 text-success"></i>
+          <span class="kpi-lbl" style="margin:0">Monte Carlo Muvaffaqiyat</span>
+        </div>
+        <div class="kpi-num" style="font-size:1.7rem">{{ avg_mc_success }}<span class="fs-6 fw-500 text-muted">%</span></div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="kpi-stat kpi-purple" style="padding:16px 20px">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <i class="bi bi-arrow-up-right-circle" style="color:#7C3AED"></i>
+          <span class="kpi-lbl" style="margin:0">O'rtacha ROI (12 oy)</span>
+        </div>
+        <div class="kpi-num" style="font-size:1.7rem">{{ avg_roi_12 }}<span class="fs-6 fw-500 text-muted">%</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROW 3: TREND + STATUS + RECOMMENDATION ═════════════ -->
+  <div class="stats-section-title"><i class="bi bi-activity"></i>Faollik va Natijalar</div>
+  <div class="row g-3 mb-4">
+
+    <!-- 30-day trend -->
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-graph-up text-bank"></i>So'nggi 30 Kun Tahlillar</h6>
+          <span class="score-badge score-badge-gray">Kunlik</span>
+        </div>
+        <div class="chart-card-body">
+          <div id="trendChart" style="min-height:200px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status donut -->
+    <div class="col-lg-3">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-pie-chart text-bank"></i>Holat</h6>
+        </div>
+        <div class="chart-card-body">
+          <div id="statusDonut" style="min-height:200px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recommendation donut -->
+    <div class="col-lg-3">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-pie-chart-fill text-bank"></i>Tavsiya</h6>
+        </div>
+        <div class="chart-card-body">
+          <div id="recDonut" style="min-height:200px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROW 4: BY CATEGORY + BY DISTRICT ══════════════════ -->
+  <div class="stats-section-title"><i class="bi bi-diagram-3"></i>Kategoriya va Hudud</div>
+  <div class="row g-3 mb-4">
+
+    <!-- By category stacked -->
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-grid-3x3-gap text-bank"></i>Biznes Kategoriya Taqqoslama</h6>
+          <span class="score-badge score-badge-gray">YES / NO / EHTIYOT</span>
+        </div>
+        <div class="chart-card-body">
+          <div id="catStackedChart" style="min-height:240px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- By district horizontal -->
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-geo-alt text-bank"></i>Top Tumanlar (tahlil soni)</h6>
+          <span class="score-badge score-badge-gray">Top 10</span>
+        </div>
+        <div class="chart-card-body">
+          <div id="districtChart" style="min-height:240px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROW 5: BLOCK SCORES + CREDIT TIER + MCC ═══════════ -->
+  <div class="stats-section-title"><i class="bi bi-stars"></i>Blok Ballari va Moliyaviy Ko'rsatkichlar</div>
+  <div class="row g-3 mb-4">
+
+    <!-- Block score averages -->
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-bar-chart-steps text-bank"></i>O'rtacha Blok Ballari</h6>
+          <span class="score-badge score-badge-blue">A–E</span>
+        </div>
+        <div class="chart-card-body">
+          <div id="blockScoreChart" style="min-height:220px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Credit tier -->
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-shield-check text-bank"></i>Kredit Darajasi Taqsimoti</h6>
+        </div>
+        <div class="chart-card-body">
+          <div id="creditTierChart" style="min-height:220px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top MCC / business types -->
+    <div class="col-lg-4">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-shop text-bank"></i>Top Biznes Turlari</h6>
+        </div>
+        <div class="chart-card-body">
+          <div id="mccChart" style="min-height:220px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROW 6: FINANCIAL HEALTH GAUGES ════════════════════ -->
+  <div class="stats-section-title"><i class="bi bi-cash-coin"></i>Moliyaviy Ko'rsatkichlar (O'rtacha)</div>
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-2">
+      <div class="chart-card" style="text-align:center">
+        <div class="chart-card-body py-3">
+          <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Investitsiya</div>
+          <div style="font-size:1.6rem;font-weight:800;color:var(--primary)">{{ avg_investment }}<span style="font-size:.85rem;font-weight:500;color:var(--text-muted)"> mln</span></div>
+          <div style="font-size:.72rem;color:var(--text-muted)">so'm (o'rtacha)</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="chart-card" style="text-align:center">
+        <div class="chart-card-body py-3">
+          <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Kredit</div>
+          <div style="font-size:1.6rem;font-weight:800;color:#7C3AED">{{ avg_loan }}<span style="font-size:.85rem;font-weight:500;color:var(--text-muted)"> mln</span></div>
+          <div style="font-size:.72rem;color:var(--text-muted)">so'm (o'rtacha)</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="chart-card" style="text-align:center">
+        <div class="chart-card-body py-3">
+          <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Maqsad Daromad</div>
+          <div style="font-size:1.6rem;font-weight:800;color:#16A34A">{{ avg_revenue }}<span style="font-size:.85rem;font-weight:500;color:var(--text-muted)"> mln</span></div>
+          <div style="font-size:.72rem;color:var(--text-muted)">so'm/oy (o'rtacha)</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="chart-card" style="text-align:center">
+        <div class="chart-card-body py-3">
+          <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">DSC Nisbati</div>
+          <div style="font-size:1.6rem;font-weight:800;color:{% if avg_dsc >= 1.25 %}#16A34A{% else %}#DC2626{% endif %}">{{ avg_dsc }}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">min: 1.25 talab</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="chart-card" style="text-align:center">
+        <div class="chart-card-body py-3">
+          <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Garov Qoplama</div>
+          <div style="font-size:1.6rem;font-weight:800;color:{% if avg_collateral >= 1.25 %}#16A34A{% else %}#DC2626{% endif %}">{{ avg_collateral }}</div>
+          <div style="font-size:.72rem;color:var(--text-muted)">min: 1.25 talab</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-2">
+      <div class="chart-card" style="text-align:center">
+        <div class="chart-card-body py-3">
+          <div style="font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:6px">Qarz Yuki</div>
+          <div style="font-size:1.6rem;font-weight:800;color:{% if avg_debt_burden <= 50 %}#16A34A{% else %}#DC2626{% endif %}">{{ avg_debt_burden }}<span style="font-size:.85rem">%</span></div>
+          <div style="font-size:.72rem;color:var(--text-muted)">max: 50% talab</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROW 7: TOP USERS + RECENT ANALYSES ════════════════ -->
+  <div class="stats-section-title"><i class="bi bi-table"></i>Foydalanuvchilar va So'nggi Faoliyat</div>
+  <div class="row g-3 mb-4">
+
+    <!-- Top users -->
+    <div class="col-lg-4">
+      <div class="chart-card h-100">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-trophy text-bank"></i>Top Foydalanuvchilar</h6>
+          <span class="score-badge score-badge-gray">Tahlil soni bo'yicha</span>
+        </div>
+        <div class="chart-card-body">
+          {% for u in top_users %}
+          <div class="user-row">
+            <div class="user-avatar-sm">
+              {{ u.name|slice:":1"|upper }}{{ u.name|slice:"1:2"|upper }}
+            </div>
+            <div style="flex:1;min-width:0">
+              <div class="fw-600" style="font-size:.825rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ u.name }}</div>
+              <div style="font-size:.72rem;color:var(--text-muted)">{{ u.total }} ta tahlil</div>
+            </div>
+            <div>
+              {% if u.success > 0 %}
+              <span class="rate-badge rate-green"><i class="bi bi-check"></i>{{ u.success }}</span>
+              {% else %}
+              <span class="rate-badge rate-gray">—</span>
+              {% endif %}
+            </div>
+            <div style="text-align:right">
+              <div class="mini-bar-wrap">
+                <div class="mini-bar"
+                     style="width:{% if top_users.0.total > 0 %}{% widthratio u.total top_users.0.total 100 %}{% else %}0{% endif %}%;
+                            background:var(--primary)"></div>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div class="text-center text-muted py-4" style="font-size:.875rem">Foydalanuvchi yo'q</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent analyses table -->
+    <div class="col-lg-8">
+      <div class="chart-card h-100">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-clock-history text-bank"></i>So'nggi Tahlillar</h6>
+          <span class="score-badge score-badge-gray">Oxirgi 15 ta</span>
+        </div>
+        <div class="chart-card-body" style="padding:0;overflow-x:auto">
+          <table class="stats-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Biznes</th>
+                <th>Foydalanuvchi</th>
+                <th>Kategoriya</th>
+                <th>Holat</th>
+                <th>Tavsiya</th>
+                <th>Ball</th>
+                <th>Sana</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in recent_analyses %}
+              <tr>
+                <td class="text-muted" style="font-size:.72rem">{{ a.pk }}</td>
+                <td>
+                  <a href="/analysis/{{ a.pk }}/dashboard/" class="fw-600 text-bank" style="font-size:.825rem">
+                    {{ a.business_name|default:a.business_type|truncatechars:28 }}
+                  </a>
+                  {% if a.district %}<div class="text-muted" style="font-size:.68rem">{{ a.district }}</div>{% endif %}
+                </td>
+                <td style="font-size:.8rem">{{ a.client.get_full_name|default:a.client.username }}</td>
+                <td>
+                  {% if a.business_category_type %}
+                  <span class="score-badge score-badge-gray" style="font-size:.65rem">{{ a.business_category_type }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if a.status == 'done' %}
+                    <span class="rate-badge rate-green"><i class="bi bi-check-circle-fill"></i>Tayyor</span>
+                  {% elif a.status == 'processing' %}
+                    <span class="rate-badge rate-amber"><i class="bi bi-hourglass-split"></i>Jarayonda</span>
+                  {% elif a.status == 'failed' %}
+                    <span class="rate-badge rate-red"><i class="bi bi-x-circle-fill"></i>Xato</span>
+                  {% else %}
+                    <span class="rate-badge rate-gray"><i class="bi bi-clock"></i>Kutmoqda</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if a.final_recommendation == 'YES' %}
+                    <span class="rate-badge rate-green"><i class="bi bi-hand-thumbs-up-fill"></i>HA</span>
+                  {% elif a.final_recommendation == 'NO' %}
+                    <span class="rate-badge rate-red"><i class="bi bi-hand-thumbs-down-fill"></i>YO'Q</span>
+                  {% elif a.final_recommendation == 'CAUTION' %}
+                    <span class="rate-badge rate-amber"><i class="bi bi-exclamation-triangle-fill"></i>EHTIYOT</span>
+                  {% else %}
+                    <span class="rate-badge rate-gray">—</span>
+                  {% endif %}
+                </td>
+                <td style="font-size:.825rem;font-weight:700">
+                  {% if a.final_score %}
+                    <span style="color:{% if a.final_score >= 70 %}#16A34A{% elif a.final_score >= 45 %}#D97706{% else %}#DC2626{% endif %}">
+                      {{ a.final_score|floatformat:0 }}
+                    </span>
+                  {% else %}—{% endif %}
+                </td>
+                <td class="text-muted" style="font-size:.72rem;white-space:nowrap">
+                  {{ a.created_at|date:"d.m.y H:i" }}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="8" class="text-center text-muted py-4">Tahlillar yo'q</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROW 8: SQB VERDICT BREAKDOWN ══════════════════════ -->
+  {% if sqb_verdict_json != '[]' %}
+  <div class="stats-section-title"><i class="bi bi-bank2"></i>SQB Bank Qarorlari</div>
+  <div class="row g-3 mb-4">
+    <div class="col-lg-5">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-award text-bank"></i>SQB Tavsiya Rangi bo'yicha</h6>
+        </div>
+        <div class="chart-card-body">
+          <div id="sqbVerdictChart" style="min-height:200px"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-7">
+      <div class="chart-card h-100">
+        <div class="chart-card-head">
+          <h6><i class="bi bi-info-circle text-bank"></i>SQB Kredit Mezonlari Izohi</h6>
+        </div>
+        <div class="chart-card-body">
+          <div class="row g-2">
+            <div class="col-6">
+              <div style="padding:12px;background:var(--success-light);border:1px solid var(--success-border);border-radius:10px">
+                <div class="fw-700 small text-success">DSC Nisbati ≥ 1.25</div>
+                <div class="text-secondary" style="font-size:.78rem">Qarz xizmatini qoplash qobiliyati</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="padding:12px;background:var(--primary-light);border:1px solid var(--primary-border);border-radius:10px">
+                <div class="fw-700 small text-bank">Garov ≥ 1.25</div>
+                <div class="text-secondary" style="font-size:.78rem">Kredit miqdoriga nisbatan garov qiymati</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="padding:12px;background:var(--warning-light);border:1px solid var(--warning-border);border-radius:10px">
+                <div class="fw-700 small" style="color:var(--warning)">Qarz yuki ≤ 50%</div>
+                <div class="text-secondary" style="font-size:.78rem">Oylik to'lovlar daromadga nisbati</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div style="padding:12px;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:10px">
+                <div class="fw-700 small" style="color:#7C3AED">O'z kapital ≥ 20%</div>
+                <div class="text-secondary" style="font-size:.78rem">Loyiha qiymatiga nisbatan o'z ulushi</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof ApexCharts === 'undefined') return;
+
+  var FONT = "'Inter', sans-serif";
+  var GRID = { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 };
+
+  /* ── 30-day Trend ─────────────────────────────── */
+  var trendLabels = {{ trend_labels_json|safe }};
+  var trendValues = {{ trend_values_json|safe }};
+  try { new ApexCharts(document.getElementById('trendChart'), {
+    chart: { type: 'area', height: 200, toolbar: { show: false },
+             fontFamily: FONT, background: 'transparent', sparkline: { enabled: false } },
+    series: [{ name: 'Tahlillar', data: trendValues }],
+    xaxis: { categories: trendLabels, labels: { style: { fontSize: '10px' }, rotate: -30 },
+             tickAmount: 10 },
+    yaxis: { min: 0, labels: { formatter: function(v){ return Math.round(v); }, style: { fontSize: '10px' } } },
+    colors: ['#1B4FD8'],
+    fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.0, stops: [0, 100] } },
+    stroke: { width: 2, curve: 'smooth' },
+    markers: { size: 3 },
+    dataLabels: { enabled: false },
+    grid: GRID,
+    tooltip: { y: { formatter: function(v){ return v + ' ta'; } } }
+  }).render(); } catch(e) { console.error('trendChart:', e); }
+
+  /* ── Status Donut ─────────────────────────────── */
+  var statusData = {{ status_json|safe }};
+  if (statusData.length)
+  try { new ApexCharts(document.getElementById('statusDonut'), {
+    chart: { type: 'donut', height: 200, toolbar: { show: false }, fontFamily: FONT, background: 'transparent' },
+    series: statusData.map(function(d){ return d.y; }),
+    labels: statusData.map(function(d){ return d.x; }),
+    colors: statusData.map(function(d){ return d.color; }),
+    legend: { position: 'bottom', fontSize: '11px' },
+    plotOptions: { pie: { donut: { size: '60%', labels: {
+      show: true,
+      total: { show: true, label: 'Jami', fontWeight: 700, fontSize: '13px',
+               formatter: function(w){ return w.globals.seriesTotals.reduce(function(a,b){return a+b;},0); } }
+    } } } },
+    dataLabels: { formatter: function(v, opts){ return opts.w.config.series[opts.seriesIndex]; } },
+  }).render(); } catch(e) { console.error('statusDonut:', e); }
+
+  /* ── Recommendation Donut ─────────────────────── */
+  var recData = {{ recommendation_json|safe }}.filter(function(d){ return d.y > 0; });
+  if (recData.length)
+  try { new ApexCharts(document.getElementById('recDonut'), {
+    chart: { type: 'donut', height: 200, toolbar: { show: false }, fontFamily: FONT, background: 'transparent' },
+    series: recData.map(function(d){ return d.y; }),
+    labels: recData.map(function(d){ return d.x; }),
+    colors: recData.map(function(d){ return d.color; }),
+    legend: { position: 'bottom', fontSize: '11px' },
+    plotOptions: { pie: { donut: { size: '60%', labels: {
+      show: true,
+      total: { show: true, label: 'Jami', fontWeight: 700, fontSize: '13px',
+               formatter: function(w){ return w.globals.seriesTotals.reduce(function(a,b){return a+b;},0); } }
+    } } } },
+    dataLabels: { formatter: function(v, opts){ return opts.w.config.series[opts.seriesIndex]; } },
+  }).render(); } catch(e) { console.error('recDonut:', e); }
+
+  /* ── Category Stacked Bar ─────────────────────── */
+  var catData = {{ by_category_json|safe }};
+  if (catData.length)
+  try { new ApexCharts(document.getElementById('catStackedChart'), {
+    chart: { type: 'bar', height: 240, stacked: true, toolbar: { show: false },
+             fontFamily: FONT, background: 'transparent' },
+    plotOptions: { bar: { horizontal: false, borderRadius: 4, columnWidth: '50%' } },
+    series: [
+      { name: 'HA (YES)',   data: catData.map(function(d){ return d.yes; }),     color: '#16A34A' },
+      { name: 'EHTIYOT',   data: catData.map(function(d){ return d.caution; }),  color: '#D97706' },
+      { name: "YO'Q (NO)", data: catData.map(function(d){ return d.no; }),       color: '#DC2626' },
+    ],
+    xaxis: { categories: catData.map(function(d){ return d.label; }), labels: { style: { fontSize: '11px' } } },
+    yaxis: { labels: { style: { fontSize: '10px' } } },
+    legend: { position: 'top', fontSize: '11px' },
+    dataLabels: { enabled: false },
+    grid: GRID,
+    tooltip: { shared: true, intersect: false }
+  }).render(); } catch(e) { console.error('catStackedChart:', e); }
+
+  /* ── District Horizontal Bar ──────────────────── */
+  var distData = {{ by_district_json|safe }};
+  if (distData.length)
+  try { new ApexCharts(document.getElementById('districtChart'), {
+    chart: { type: 'bar', height: 240, toolbar: { show: false }, fontFamily: FONT, background: 'transparent' },
+    plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%', distributed: false } },
+    series: [
+      { name: 'Jami', data: distData.map(function(d){ return d.total; }), color: '#1B4FD8' },
+      { name: 'Tasdiqlangan', data: distData.map(function(d){ return d.yes; }), color: '#16A34A' },
+    ],
+    xaxis: { categories: distData.map(function(d){ return d.label; }), labels: { style: { fontSize: '10px' } } },
+    yaxis: { labels: { style: { fontSize: '10px' } } },
+    legend: { position: 'top', fontSize: '11px' },
+    dataLabels: { enabled: false },
+    grid: GRID,
+    tooltip: {
+      shared: true, intersect: false,
+      custom: function(opts) {
+        var i = opts.dataPointIndex;
+        var d = distData[i];
+        return '<div style="padding:8px 12px;font-size:12px">'
+          + '<b>' + d.label + '</b><br>'
+          + 'Jami: ' + d.total + '<br>'
+          + 'Tasdiqlangan: ' + d.yes + '<br>'
+          + 'Muvaffaqiyat: ' + d.rate + '%'
+          + '</div>';
+      }
+    }
+  }).render(); } catch(e) { console.error('districtChart:', e); }
+
+  /* ── Block Score Averages ─────────────────────── */
+  var blockScores = {{ block_scores_json|safe }};
+  if (blockScores.length)
+  try { new ApexCharts(document.getElementById('blockScoreChart'), {
+    chart: { type: 'bar', height: 220, toolbar: { show: false }, fontFamily: FONT, background: 'transparent' },
+    plotOptions: { bar: { horizontal: false, borderRadius: 6, distributed: true, columnWidth: '60%' } },
+    series: [{ name: "O'rtacha Ball", data: blockScores.map(function(d){ return d.score; }) }],
+    xaxis: { categories: blockScores.map(function(d){ return d.block; }), labels: { style: { fontSize: '10px' } } },
+    yaxis: { max: 100, labels: { formatter: function(v){ return v+'/100'; }, style: { fontSize: '9px' } } },
+    colors: blockScores.map(function(d){ return d.color; }),
+    legend: { show: false },
+    dataLabels: { enabled: true, formatter: function(v){ return v.toFixed(1); }, style: { fontSize: '11px', fontWeight: 700 } },
+    annotations: { yaxis: [{ y: 70, borderColor: '#16A34A', strokeDashArray: 4,
+                              label: { text: 'Maqsad (70)', style: { fontSize: '10px', color: '#16A34A', background: '#F0FDF4' } } }] },
+    grid: GRID,
+  }).render(); } catch(e) { console.error('blockScoreChart:', e); }
+
+  /* ── Credit Tier ──────────────────────────────── */
+  var tierData = {{ credit_tier_json|safe }};
+  var TIER_COLORS = { 'Excellent': '#16A34A', 'Good': '#1B4FD8', 'Moderate': '#D97706', 'High Risk': '#DC2626' };
+  if (tierData.length)
+  try { new ApexCharts(document.getElementById('creditTierChart'), {
+    chart: { type: 'donut', height: 220, toolbar: { show: false }, fontFamily: FONT, background: 'transparent' },
+    series: tierData.map(function(d){ return d.y; }),
+    labels: tierData.map(function(d){ return d.x; }),
+    colors: tierData.map(function(d){ return TIER_COLORS[d.x] || '#94A3B8'; }),
+    legend: { position: 'bottom', fontSize: '11px' },
+    plotOptions: { pie: { donut: { size: '58%', labels: {
+      show: true,
+      total: { show: true, label: 'Tayyor', fontWeight: 700, fontSize: '12px',
+               formatter: function(w){ return w.globals.seriesTotals.reduce(function(a,b){return a+b;},0); } }
+    } } } },
+    dataLabels: { formatter: function(v, opts){ return opts.w.config.series[opts.seriesIndex]; } },
+  }).render(); } catch(e) { console.error('creditTierChart:', e); }
+
+  /* ── Top MCC ──────────────────────────────────── */
+  var mccData = {{ top_mcc_json|safe }};
+  if (mccData.length)
+  try { new ApexCharts(document.getElementById('mccChart'), {
+    chart: { type: 'bar', height: 220, toolbar: { show: false }, fontFamily: FONT, background: 'transparent' },
+    plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '65%', distributed: true } },
+    series: [{ name: 'Tahlillar', data: mccData.map(function(d){ return d.y; }) }],
+    xaxis: { categories: mccData.map(function(d){ return d.x; }), labels: { style: { fontSize: '9px' } } },
+    yaxis: { labels: { style: { fontSize: '9px' }, maxWidth: 160 } },
+    colors: ['#1B4FD8','#7C3AED','#0891B2','#16A34A','#D97706','#DC2626','#6366F1','#EC4899'],
+    legend: { show: false },
+    dataLabels: { enabled: true, style: { fontSize: '10px', fontWeight: 700 } },
+    grid: GRID,
+  }).render(); } catch(e) { console.error('mccChart:', e); }
+
+  /* ── SQB Verdict ──────────────────────────────── */
+  var sqbData = {{ sqb_verdict_json|safe }};
+  var SQB_COLORS = { 'green': '#16A34A', 'yellow': '#D97706', 'orange': '#EA580C', 'red': '#DC2626' };
+  if (sqbData.length && document.getElementById('sqbVerdictChart'))
+  try { new ApexCharts(document.getElementById('sqbVerdictChart'), {
+    chart: { type: 'donut', height: 200, toolbar: { show: false }, fontFamily: FONT, background: 'transparent' },
+    series: sqbData.map(function(d){ return d.y; }),
+    labels: sqbData.map(function(d){ return d.x; }),
+    colors: sqbData.map(function(d){ return SQB_COLORS[d.x] || '#94A3B8'; }),
+    legend: { position: 'bottom', fontSize: '11px' },
+    plotOptions: { pie: { donut: { size: '58%' } } },
+    dataLabels: { formatter: function(v, opts){ return opts.w.config.series[opts.seriesIndex]; } },
+  }).render(); } catch(e) { console.error('sqbVerdictChart:', e); }
+
+});
+</script>
+{% endblock %}

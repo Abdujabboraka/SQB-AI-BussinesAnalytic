@@ -18,10 +18,17 @@ class BlockEView(LoginRequiredMixin, View):
         if block:
             all_comps = block.competitors_1km or []
             ctx['competitors_json'] = json.dumps(all_comps)
-            # Bar chart: competitor name vs closure probability
             names = [c.get('name', '?')[:20] for c in all_comps[:10]]
             probs = [round(c.get('closure_probability', 0) * 100, 1) for c in all_comps[:10]]
             ctx['comp_names'] = json.dumps(names)
             ctx['comp_closure_probs'] = json.dumps(probs)
             ctx['entry_barriers'] = block.entry_barriers
+            ctx['comparison_json'] = json.dumps((block.raw_data or {}).get('comparison', []))
+            # Scatter data: distance vs closure_probability per competitor
+            scatter = [
+                {'x': round(c.get('distance_m', 0)), 'y': round(c.get('closure_probability', 0) * 100, 1),
+                 'name': c.get('name', '?')[:16]}
+                for c in all_comps if c.get('distance_m') is not None
+            ]
+            ctx['scatter_json'] = json.dumps(scatter)
         return render(request, self.template_name, ctx)

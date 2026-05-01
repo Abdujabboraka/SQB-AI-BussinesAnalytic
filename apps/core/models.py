@@ -388,11 +388,14 @@ class SystemConfiguration(models.Model):
     Singleton model to hold system-wide configurations, such as the active AI provider.
     """
     PROVIDER_CHOICES = [
-        ('gemini', 'Google Gemini'),
-        ('openai', 'OpenAI'),
-        ('anthropic', 'Anthropic'),
+        ('gemini',      'Google Gemini'),
+        ('openai',      'OpenAI GPT'),
+        ('anthropic',   'Claude (Anthropic)'),
+        ('aicc',        'AI.CC Proxy'),
+        ('openrouter',  'OpenRouter'),
+        ('apifreellm',  'FreeLLM (Llama-3)'),
         ('huggingface', 'HuggingFace'),
-        ('mock', 'Mock (Testing)'),
+        ('mock',        'Test Rejimi (Mock)'),
     ]
 
     active_ai_provider = models.CharField(
@@ -401,10 +404,14 @@ class SystemConfiguration(models.Model):
         default='gemini',
         verbose_name="Faol AI Provayderi"
     )
-    
-    gemini_api_key = models.CharField(max_length=255, blank=True, null=True, verbose_name="Gemini API Key")
-    openai_api_key = models.CharField(max_length=255, blank=True, null=True, verbose_name="OpenAI API Key")
-    anthropic_api_key = models.CharField(max_length=255, blank=True, null=True, verbose_name="Anthropic API Key")
+
+    gemini_api_key      = models.CharField(max_length=255, blank=True, null=True, verbose_name="Gemini API Key")
+    openai_api_key      = models.CharField(max_length=255, blank=True, null=True, verbose_name="OpenAI API Key")
+    anthropic_api_key   = models.CharField(max_length=255, blank=True, null=True, verbose_name="Anthropic API Key")
+    aicc_api_key        = models.CharField(max_length=255, blank=True, null=True, verbose_name="AICC API Key")
+    aicc_url            = models.CharField(max_length=255, blank=True, null=True, verbose_name="AICC URL")
+    openrouter_api_key  = models.CharField(max_length=255, blank=True, null=True, verbose_name="OpenRouter API Key")
+    apifreellm_api_key  = models.CharField(max_length=255, blank=True, null=True, verbose_name="FreeLLM API Key")
 
     updated_at = models.DateTimeField(auto_now=True)
 

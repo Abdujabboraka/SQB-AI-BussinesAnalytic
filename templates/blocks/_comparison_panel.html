@@ -1,0 +1,143 @@
+{% comment %}
+Reusable ApexCharts comparison panel.
+Required context: comparison_json (JSON array of {label, user, ai, diff_pct, risk})
+Optional:         block_label (e.g. "A Blok")
+{% endcomment %}
+{% if comparison_json and comparison_json != '[]' %}
+<div class="card-premium mb-4" id="comparisonPanel">
+  <div class="card-header-premium">
+    <h6><i class="bi bi-bar-chart-steps me-2 text-bank"></i>Foydalanuvchi vs AI Taqqoslama</h6>
+    <span class="score-badge score-badge-gray">{{ block_label|default:"Blok" }}</span>
+  </div>
+  <div class="card-body-premium">
+    <div id="comparisonChart" style="min-height:160px;"></div>
+
+    <!-- Diff badges row -->
+    <div id="comparisonBadges" class="d-flex flex-wrap gap-2 mt-3"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var raw = {{ comparison_json|safe }};
+  if (!raw || !raw.length) return;
+
+  var RISK_COLORS = { low: '#16A34A', medium: '#D97706', high: '#DC2626' };
+  var RISK_LABELS = { low: 'Past farq', medium: "O'rta farq", high: 'Yuqori farq' };
+
+  /* ── ApexCharts grouped horizontal bar ── */
+  var categories = raw.map(function(d) { return d.label; });
+  var userVals   = raw.map(function(d) { return Math.abs(d.user  || 0); });
+  var aiVals     = raw.map(function(d) { return Math.abs(d.ai    || 0); });
+
+  var barColors = raw.map(function(d) {
+    return RISK_COLORS[d.risk] || '#64748B';
+  });
+
+  var options = {
+    chart: {
+      type: 'bar',
+      height: Math.max(120, raw.length * 90),
+      toolbar: { show: false },
+      fontFamily: 'Inter, sans-serif',
+      background: 'transparent',
+      animations: { enabled: true, speed: 600 },
+    },
+    plotOptions: {
+      bar: {
+        horizontal: true,
+        barHeight: '55%',
+        borderRadius: 5,
+        dataLabels: { position: 'top' },
+      }
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: function(val) {
+        if (val >= 1e9) return (val / 1e9).toFixed(1) + ' mlrd';
+        if (val >= 1e6) return (val / 1e6).toFixed(1) + ' mln';
+        if (val >= 1e3) return (val / 1e3).toFixed(0) + ' K';
+        return val.toString();
+      },
+      style: { fontSize: '11px', fontWeight: 600 },
+      offsetX: 8,
+    },
+    series: [
+      {
+        name: 'Siz (Kiritgan)',
+        data: userVals,
+        color: '#1B4FD8',
+      },
+      {
+        name: 'AI Baholash',
+        data: aiVals,
+        color: '#7C3AED',
+      }
+    ],
+    xaxis: {
+      categories: categories,
+      labels: {
+        formatter: function(val) {
+          if (val >= 1e9) return (val / 1e9).toFixed(1) + 'M';
+          if (val >= 1e6) return (val / 1e6).toFixed(0) + 'K';
+          return val;
+        },
+        style: { fontSize: '11px' }
+      }
+    },
+    yaxis: {
+      labels: {
+        style: { fontSize: '11px', fontWeight: 500 },
+        maxWidth: 220,
+      }
+    },
+    tooltip: {
+      shared: true,
+      intersect: false,
+      y: {
+        formatter: function(val) {
+          if (val >= 1e9) return (val / 1e9).toFixed(2) + ' mlrd so\'m';
+          if (val >= 1e6) return (val / 1e6).toFixed(1) + ' mln so\'m';
+          if (val >= 1e3) return (val / 1e3).toFixed(0) + ' K so\'m';
+          return val.toLocaleString();
+        }
+      }
+    },
+    legend: {
+      position: 'top',
+      horizontalAlign: 'right',
+      fontSize: '12px',
+    },
+    grid: {
+      borderColor: 'rgba(100,116,139,0.12)',
+      strokeDashArray: 4,
+    },
+  };
+
+  try {
+    var chart = new ApexCharts(document.getElementById('comparisonChart'), options);
+    chart.render();
+  } catch(e) { console.error('comparisonChart:', e); }
+
+  /* ── Diff badges ── */
+  var badges = document.getElementById('comparisonBadges');
+  raw.forEach(function(d) {
+    var color = RISK_COLORS[d.risk] || '#64748B';
+    var icon  = d.risk === 'low' ? 'bi-check-circle-fill'
+              : d.risk === 'medium' ? 'bi-exclamation-circle-fill'
+              : 'bi-x-circle-fill';
+    var sign  = d.diff_pct > 0 ? '+' : '';
+    var badge = document.createElement('div');
+    badge.style.cssText = [
+      'display:inline-flex', 'align-items:center', 'gap:6px',
+      'padding:6px 12px', 'border-radius:8px', 'font-size:0.8rem', 'font-weight:600',
+      'background:' + color + '18', 'border:1px solid ' + color + '44', 'color:' + color,
+    ].join(';');
+    badge.innerHTML = '<i class="bi ' + icon + '"></i>'
+      + d.label.split(' vs ')[0].trim()
+      + ': <span style="margin-left:4px;">' + sign + d.diff_pct.toFixed(1) + '%</span>';
+    badges.appendChild(badge);
+  });
+});
+</script>
+{% endif %}

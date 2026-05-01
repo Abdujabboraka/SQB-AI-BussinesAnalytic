@@ -9,7 +9,7 @@
 - **Data-Driven Credit Decisions**: Replaces subjective human analysis with mathematically backed forecasts and unbiased AI evaluations.
 - **Reduced Risk Exposure**: Identifies hidden market saturation, high churn rates, and local competitor threats before granting a loan.
 - **Faster Processing Times**: Reduces manual analysis time from days to mere minutes, instantly generating a comprehensive 5-block assessment report.
-- **Zero-Downtime Reliability**: Engineered with an **Intelligent AI Failover Mechanism**. If one AI provider (e.g., Gemini) hits a rate limit, the system instantly switches to another (OpenAI, Anthropic, or HuggingFace) with zero disruption to the user.
+- **Zero-Downtime Reliability**: Engineered with an **Intelligent AI Failover Mechanism**. If one AI provider (e.g., Gemini) hits a rate limit, the system instantly switches to another (OpenAI, AICC, Anthropic, or HuggingFace) with zero disruption to the user.
 - **Uzbek Localization**: The entire platform, from the frontend UI to the AI's analytical output, is deeply localized for the Uzbekistan market, taking into account local holidays (Navroz, Ramadan), purchasing power, and regional dynamics.
 
 ---
@@ -18,7 +18,7 @@
 
 ### 1. 🤖 Multi-Model AI Engine with Auto-Failover
 BiznesAI integrates multiple Large Language Models (LLMs) to ensure constant uptime:
-- Supported Engines: **Google Gemini**, **Anthropic Claude**, **OpenAI GPT-4**, and **HuggingFace**.
+- Supported Engines: **Google Gemini**, **OpenAI GPT-4**, **AI.CC (Proxy)**, **Anthropic Claude**, and **HuggingFace**.
 - **Smart Dispatcher**: Automatically detects API limits (429 errors), caches the broken provider to disable it on the frontend UI, and instantly falls back to the next available model.
 - **Synthetic Mock Mode**: If all API keys are exhausted, the app seamlessly switches to a highly realistic, rule-based Mock Mode without breaking the user experience.
 

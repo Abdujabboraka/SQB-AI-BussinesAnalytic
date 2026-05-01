@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}A Blok — Bozor Tahlili — BiznesAI{% endblock %}
+
 {% block content %}
 <div class="container-fluid px-4">
   <nav class="mb-3"><ol class="breadcrumb small">
@@ -13,7 +14,7 @@
     <div class="d-flex align-items-center justify-content-between">
       <div>
         <h1 class="h4 mb-1"><i class="bi bi-graph-up-arrow me-2"></i>A Bloki — Bozor Tahlili</h1>
-        <p class="subtitle mb-0">TAM / SAM / SOM va bozor to'yinganligi</p>
+        <p class="subtitle mb-0">TAM / SAM / SOM · Bozor to'yinganligi · Nisha imkoniyati</p>
       </div>
       {% if block %}
       <span class="score-badge score-badge-blue fs-6">{{ block.niche_opportunity_score|floatformat:0 }}/100</span>
@@ -30,10 +31,10 @@
   {% else %}
 
   {% if block.is_mock %}
-  <div class="mock-warning mb-3"><i class="bi bi-info-circle"></i>Bu demo ma'lumotlar — Gemini API kaliti kiritilmagan</div>
+  <div class="mock-warning mb-3"><i class="bi bi-info-circle"></i>Bu demo ma'lumotlar — AI API kaliti kiritilmagan</div>
   {% endif %}
 
-  <!-- Metric Cards -->
+  <!-- KPI Cards -->
   <div class="row g-3 mb-4">
     <div class="col-md-4">
       <div class="metric-card text-center">
@@ -58,32 +59,18 @@
     </div>
   </div>
 
+  <!-- Charts Row 1: Funnel + Saturation Gauge -->
   <div class="row g-4 mb-4">
-    <!-- Funnel Chart -->
     <div class="col-lg-7">
       <div class="chart-wrapper h-100">
-        <div class="chart-title">Bozor hunisi (TAM → SAM → SOM)</div>
-        <div style="height:240px">
-          <canvas id="funnelChart"></canvas>
-        </div>
+        <div class="chart-title">Bozor Hajmi Funnel (TAM → SAM → SOM)</div>
+        <div id="apexFunnel" style="min-height:260px;"></div>
       </div>
     </div>
-    <!-- Saturation Gauge -->
     <div class="col-lg-5">
       <div class="chart-wrapper h-100 text-center">
-        <div class="chart-title">Bozor to'yinganligi</div>
-        <div style="height:200px;max-width:200px;margin:0 auto">
-          <canvas id="saturationGauge"></canvas>
-        </div>
-        <div class="mt-2">
-          {% if saturation_pct >= 80 %}
-            <span class="score-badge score-badge-red">Yuqori to'yinganlik</span>
-          {% elif saturation_pct >= 50 %}
-            <span class="score-badge score-badge-amber">O'rtacha to'yinganlik</span>
-          {% else %}
-            <span class="score-badge score-badge-green">Past to'yinganlik</span>
-          {% endif %}
-        </div>
+        <div class="chart-title">Bozor To'yinganligi Radar</div>
+        <div id="apexRadar" style="min-height:260px;"></div>
       </div>
     </div>
   </div>
@@ -106,9 +93,28 @@
     </div>
   </div>
 
+  <!-- Saturation Radial -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">To'yinganlik Darajasi</div>
+        <div id="apexSaturation" style="min-height:220px;"></div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">Bozor Sog'liqi Ballari</div>
+        <div id="apexScoreBar" style="min-height:220px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison Panel -->
+  {% include 'blocks/_comparison_panel.html' with comparison_json=comparison_json block_label="A Blok — Bozor" %}
+
   <!-- AI Commentary -->
   <div class="ai-commentary mb-4">
-    <div class="fw-700 mb-2 text-bank small text-uppercase"><i class="bi bi-robot me-1"></i>Gemini AI Tahlili</div>
+    <div class="fw-700 mb-2 text-bank small text-uppercase"><i class="bi bi-robot me-1"></i>AI Tahlili</div>
     {{ block.ai_commentary|linebreaks }}
   </div>
 
@@ -122,12 +128,100 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{% static 'js/charts.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
+  if (typeof ApexCharts === 'undefined') {
+    console.error('ApexCharts library not loaded — charts will not render');
+    return;
+  }
   {% if block %}
-  initFunnelChart('funnelChart', {{ block.tam_uzs }}, {{ block.sam_uzs }}, {{ block.som_uzs }});
-  initGaugeChart('saturationGauge', {{ saturation_pct }}, 'To\'yinganlik');
+  var tam = {{ block.tam_uzs }};
+  var sam = {{ block.sam_uzs }};
+  var som = {{ block.som_uzs }};
+  var sat = parseFloat('{{ saturation_pct }}') || 0;
+  var scores = {{ scores_json|safe }};
+
+  /* clamp saturation so radialBar stays 0-100 */
+  sat = Math.min(100, Math.max(0, sat));
+
+  function fmtUZS(v) {
+    if (v >= 1e12) return (v/1e12).toFixed(1) + ' trln';
+    if (v >= 1e9)  return (v/1e9).toFixed(1)  + ' mlrd';
+    if (v >= 1e6)  return (v/1e6).toFixed(1)  + ' mln';
+    return v.toLocaleString();
+  }
+
+  /* ApexCharts Funnel (horizontal bar) */
+  if (document.getElementById('apexFunnel'))
+  try { new ApexCharts(document.getElementById('apexFunnel'), {
+    chart: { type: 'bar', height: 260, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    plotOptions: { bar: { horizontal: true, distributed: true, borderRadius: 6, barHeight: '52%' } },
+    dataLabels: {
+      enabled: true,
+      formatter: function(val) { return fmtUZS(val); },
+      style: { fontSize: '12px', fontWeight: 700 }
+    },
+    series: [{ name: 'Hajm (so\'m)', data: [tam, sam, som] }],
+    xaxis: {
+      categories: ['TAM — Umumiy bozor', 'SAM — Xizmat bozori', 'SOM — Qo\'lga kiritish'],
+      labels: { formatter: function(v) { return fmtUZS(v); }, style: { fontSize: '11px' } }
+    },
+    colors: ['#1B4FD8', '#2563EB', '#16A34A'],
+    legend: { show: false },
+    grid: { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 },
+    tooltip: { y: { formatter: function(v) { return fmtUZS(v) + ' so\'m'; } } }
+  }).render(); } catch(e) { console.error('apexFunnel:', e); }
+
+  /* ApexCharts Radar — market health */
+  if (document.getElementById('apexRadar'))
+  try { new ApexCharts(document.getElementById('apexRadar'), {
+    chart: { type: 'radar', height: 260, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    series: [{ name: 'Bozor Sog\'liqi', data: [scores.gap_score, scores.niche_score, scores.saturation_inv] }],
+    labels: ['GAP Bali', 'Nisha Imkoniyati', 'Bo\'sh joy (100-to\'yinganlik)'],
+    fill: { opacity: 0.25 },
+    stroke: { width: 2 },
+    markers: { size: 5 },
+    colors: ['#1B4FD8'],
+    yaxis: { show: false, min: 0, max: 100 },
+    plotOptions: { radar: { polygons: { strokeColors: 'rgba(100,116,139,0.2)', fill: { colors: ['rgba(27,79,216,0.04)', 'transparent'] } } } },
+    tooltip: { y: { formatter: function(v) { return v.toFixed(1) + '/100'; } } }
+  }).render(); } catch(e) { console.error('apexRadar:', e); }
+
+  /* ApexCharts RadialBar — saturation */
+  var satColor = sat >= 80 ? '#DC2626' : sat >= 50 ? '#D97706' : '#16A34A';
+  if (document.getElementById('apexSaturation'))
+  try { new ApexCharts(document.getElementById('apexSaturation'), {
+    chart: { type: 'radialBar', height: 220, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    series: [sat],
+    labels: ['To\'yinganlik'],
+    colors: [satColor],
+    plotOptions: {
+      radialBar: {
+        hollow: { size: '55%' },
+        track: { background: satColor + '22' },
+        dataLabels: {
+          name: { fontSize: '13px', offsetY: -8 },
+          value: { fontSize: '26px', fontWeight: 700, formatter: function(v) { return v + '%'; } }
+        }
+      }
+    },
+  }).render(); } catch(e) { console.error('apexSaturation:', e); }
+
+  /* ApexCharts Bar — score comparison */
+  if (document.getElementById('apexScoreBar'))
+  try { new ApexCharts(document.getElementById('apexScoreBar'), {
+    chart: { type: 'bar', height: 220, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    plotOptions: { bar: { horizontal: false, borderRadius: 5, distributed: true, columnWidth: '50%' } },
+    series: [{ name: 'Ball', data: [scores.gap_score, scores.niche_score, scores.saturation_inv] }],
+    xaxis: { categories: ['GAP', 'Nisha', 'Bo\'sh joy'], labels: { style: { fontSize: '11px' } } },
+    yaxis: { max: 100, labels: { formatter: function(v) { return v + '/100'; } } },
+    colors: ['#1B4FD8', '#7C3AED', '#16A34A'],
+    legend: { show: false },
+    dataLabels: { enabled: true, formatter: function(v) { return v.toFixed(0); } },
+    grid: { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 },
+    tooltip: { y: { formatter: function(v) { return v.toFixed(1) + '/100'; } } }
+  }).render(); } catch(e) { console.error('apexScoreBar:', e); }
+
   {% endif %}
 });
 </script>

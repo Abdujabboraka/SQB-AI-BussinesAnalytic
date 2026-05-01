@@ -18,6 +18,98 @@
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/theme.css' %}">
   {% block extra_css %}{% endblock %}
+  <style>
+  /* ─── Government Notification System ───────────────────────── */
+  .notif-stack {
+    position: fixed; top: 76px; right: 16px; z-index: 1090;
+    width: 400px; max-width: calc(100vw - 32px);
+    pointer-events: none;
+  }
+  .notif-card {
+    pointer-events: all;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 6px 28px rgba(0,0,0,0.13);
+    border: 1px solid #e2e8f0;
+    border-left: 5px solid #e2e8f0;
+    margin-bottom: 10px;
+    overflow: hidden;
+    animation: notifSlideIn .3s cubic-bezier(.4,0,.2,1);
+  }
+  @keyframes notifSlideIn {
+    from { transform: translateX(120%); opacity: 0; }
+    to   { transform: translateX(0);    opacity: 1; }
+  }
+  @keyframes notifFadeOut {
+    from { transform: translateX(0); opacity: 1; max-height: 200px; margin-bottom: 10px; }
+    to   { transform: translateX(120%); opacity: 0; max-height: 0; margin-bottom: 0; }
+  }
+  .notif-card.notif-success { border-left-color: #16a34a; }
+  .notif-card.notif-error   { border-left-color: #dc2626; }
+  .notif-card.notif-warning { border-left-color: #d97706; }
+  .notif-card.notif-info    { border-left-color: #1e3a8a; }
+
+  .notif-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 14px 6px;
+  }
+  .notif-ico              { font-size: 1.15rem; flex-shrink: 0; }
+  .notif-ico.c-success    { color: #16a34a; }
+  .notif-ico.c-error      { color: #dc2626; }
+  .notif-ico.c-warning    { color: #d97706; }
+  .notif-ico.c-info       { color: #1e3a8a; }
+
+  .notif-title {
+    flex: 1;
+    font-size: 0.72rem; font-weight: 800;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: #0f172a;
+  }
+  .notif-close {
+    background: none; border: none;
+    color: #9ca3af; cursor: pointer; padding: 2px 4px;
+    font-size: 0.75rem; border-radius: 4px; transition: color .15s;
+  }
+  .notif-close:hover { color: #374151; background: #f1f5f9; }
+  .notif-body {
+    padding: 2px 14px 12px 44px;
+    font-size: 0.875rem; color: #374151; line-height: 1.55;
+  }
+  .notif-foot {
+    padding: 7px 14px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    font-size: 0.72rem; color: #94a3b8;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .notif-ref { font-family: 'Courier New', monospace; letter-spacing: .02em; }
+  .notif-action a {
+    font-size: 0.78rem; font-weight: 600;
+    color: #1e3a8a; text-decoration: none;
+  }
+  .notif-action a:hover { text-decoration: underline; }
+
+  /* Analysis completion toast */
+  #analysisToast {
+    position: fixed; bottom: 24px; right: 16px; z-index: 1100;
+    width: 380px; max-width: calc(100vw - 32px);
+    background: #fff; border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    border: 1px solid #e2e8f0; overflow: hidden;
+    display: none;
+  }
+  #analysisToast.show {
+    display: block;
+    animation: notifSlideIn .35s cubic-bezier(.4,0,.2,1);
+  }
+  .atv-head { padding: 14px 16px 8px; display: flex; align-items: center; gap: 12px; }
+  .atv-body { padding: 0 16px 14px; font-size: 0.875rem; color: #374151; line-height: 1.5; }
+  .atv-foot {
+    padding: 10px 16px; background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  </style>
 </head>
 <body>
 
@@ -77,6 +169,19 @@
             {% empty %}
                 <li><a class="dropdown-item text-muted" href="#"><i class="bi bi-x-circle me-2"></i>Provayderlar yo'q</a></li>
             {% endfor %}
+            {% if serper_configured %}
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <span class="dropdown-item text-muted" style="cursor:default; font-size:0.85rem;">
+                  <i class="bi bi-search me-2"></i>Serper Web Search
+                  {% if serper_working %}
+                    <i class="bi bi-check-circle-fill text-success ms-2"></i>
+                  {% else %}
+                    <span class="badge bg-danger ms-2" style="font-size:0.6rem">Xato</span>
+                  {% endif %}
+                </span>
+              </li>
+            {% endif %}
           </ul>
         </li>
 
@@ -130,19 +235,102 @@
   </div>
 </nav>
 
-<!-- ═══ MESSAGES ═══ -->
-{% if messages %}
-<div class="messages-container" style="position:fixed;top:72px;right:16px;z-index:1090;width:360px;max-width:calc(100vw - 32px);">
-  {% for message in messages %}
-  <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert"
-       style="border-radius:var(--radius-md);border:1px solid var(--border);box-shadow:var(--shadow-md);font-size:0.875rem;">
-    <i class="bi bi-{% if message.tags == 'success' %}check-circle-fill text-success{% elif message.tags == 'error' or message.tags == 'danger' %}exclamation-triangle-fill text-danger{% elif message.tags == 'warning' %}exclamation-circle-fill text-warning{% else %}info-circle-fill text-bank{% endif %} me-2"></i>
-    {{ message }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert" style="padding:0.5rem;"></button>
+<!-- ═══ NOTIFICATIONS ════════════════════════════════════════ -->
+<div class="notif-stack" id="notifStack">
+
+<!-- AI Provider Alert (shown dynamically when a failover is detected) -->
+<div id="aiProviderAlert" class="notif-card notif-warning" role="alert" style="display:none">
+  <div class="notif-head">
+    <span class="notif-ico c-warning" id="aiAlertIcon"><i class="bi bi-robot"></i></span>
+    <span class="notif-title" id="aiAlertTitle">AI Provayder O'zgartirildi</span>
+    <button class="notif-close" onclick="dismissAIAlert()" aria-label="Yopish"><i class="bi bi-x-lg"></i></button>
   </div>
-  {% endfor %}
+  <div class="notif-body" id="aiAlertBody"></div>
+  <div class="notif-foot">
+    <span class="notif-ref" id="aiAlertTime" style="font-size:0.72rem;color:#94a3b8"></span>
+    <span class="notif-action">
+      <a href="#" id="aiAlertSwitchBtn" onclick="openAIModelDropdown(); dismissAIAlert(); return false;">
+        <i class="bi bi-robot me-1"></i>Almashtirish
+      </a>
+    </span>
+  </div>
+</div>
+
+{% if messages %}
+{% for message in messages %}
+
+{% if "system_error" in message.tags %}
+<div class="notif-card notif-error" role="alert">
+  <div class="notif-head">
+    <span class="notif-ico c-error"><i class="bi bi-shield-exclamation"></i></span>
+    <span class="notif-title">Tizim Xatoligi</span>
+    <button class="notif-close" onclick="this.closest('.notif-card').remove()" aria-label="Yopish"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="notif-body">{{ message }}</div>
+  <div class="notif-foot">
+    <span class="notif-ref">REF: SQB-{% now "ymdHi" %}{{ forloop.counter }}</span>
+    <span class="notif-action"><a href="mailto:support@sqb.uz"><i class="bi bi-headset me-1"></i>Texnik yordam</a></span>
+  </div>
+</div>
+
+{% elif "input_error" in message.tags %}
+<div class="notif-card notif-error" role="alert">
+  <div class="notif-head">
+    <span class="notif-ico c-error"><i class="bi bi-pencil-square"></i></span>
+    <span class="notif-title">Ma'lumot Xatoligi</span>
+    <button class="notif-close" onclick="this.closest('.notif-card').remove()" aria-label="Yopish"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="notif-body">{{ message }}</div>
+  <div class="notif-foot">
+    <span style="color:#94a3b8">Kiritilgan ma'lumotlarda muammo bor</span>
+    <span class="notif-action"><a href="{% url 'analysis_create' %}"><i class="bi bi-arrow-left me-1"></i>Formaga qaytish</a></span>
+  </div>
+</div>
+
+{% elif "error" in message.tags or "danger" in message.tags %}
+<div class="notif-card notif-error" role="alert">
+  <div class="notif-head">
+    <span class="notif-ico c-error"><i class="bi bi-exclamation-octagon-fill"></i></span>
+    <span class="notif-title">Xatolik</span>
+    <button class="notif-close" onclick="this.closest('.notif-card').remove()" aria-label="Yopish"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="notif-body">{{ message }}</div>
+</div>
+
+{% elif "warning" in message.tags %}
+<div class="notif-card notif-warning" role="alert" data-auto-close="10000">
+  <div class="notif-head">
+    <span class="notif-ico c-warning"><i class="bi bi-exclamation-triangle-fill"></i></span>
+    <span class="notif-title">Ogohlantirish</span>
+    <button class="notif-close" onclick="this.closest('.notif-card').remove()" aria-label="Yopish"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="notif-body">{{ message }}</div>
+</div>
+
+{% elif "success" in message.tags %}
+<div class="notif-card notif-success" role="alert" data-auto-close="6000">
+  <div class="notif-head">
+    <span class="notif-ico c-success"><i class="bi bi-check-circle-fill"></i></span>
+    <span class="notif-title">Muvaffaqiyatli</span>
+    <button class="notif-close" onclick="this.closest('.notif-card').remove()" aria-label="Yopish"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="notif-body">{{ message }}</div>
+</div>
+
+{% else %}
+<div class="notif-card notif-info" role="alert" data-auto-close="7000">
+  <div class="notif-head">
+    <span class="notif-ico c-info"><i class="bi bi-info-circle-fill"></i></span>
+    <span class="notif-title">Ma'lumot</span>
+    <button class="notif-close" onclick="this.closest('.notif-card').remove()" aria-label="Yopish"><i class="bi bi-x-lg"></i></button>
+  </div>
+  <div class="notif-body">{{ message }}</div>
 </div>
 {% endif %}
+
+{% endfor %}
+{% endif %}
+</div>
 
 <!-- ═══ MAIN CONTENT ═══ -->
 <main class="animate-fade-in">
@@ -205,22 +393,59 @@
   </div>
 </div>
 
+<!-- ═══ ANALYSIS COMPLETION TOAST ══════════════════════════ -->
+<div id="analysisToast" role="status" aria-live="polite">
+  <div class="atv-head">
+    <div id="analysisToastIconWrap"
+         style="width:42px;height:42px;border-radius:10px;display:flex;align-items:center;
+                justify-content:center;flex-shrink:0;font-size:1.3rem;background:#f0fdf4;">
+      <i id="analysisToastIcon" class="bi bi-check-circle-fill text-success"></i>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div id="analysisToastTitle"
+           style="font-size:0.72rem;font-weight:800;text-transform:uppercase;
+                  letter-spacing:.06em;color:#0f172a">Tahlil Yakunlandi</div>
+      <div id="analysisToastBusiness"
+           style="font-size:0.8rem;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+    </div>
+    <button onclick="document.getElementById('analysisToast').classList.remove('show')"
+            style="background:none;border:none;color:#9ca3af;cursor:pointer;
+                   font-size:0.75rem;padding:2px 4px;border-radius:4px;"
+            aria-label="Yopish">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="atv-body">
+    <span id="toastMessage">Tahlil muvaffaqiyatli yakunlandi.</span>
+  </div>
+  <div class="atv-foot">
+    <span style="font-size:0.75rem;color:#9ca3af"><i class="bi bi-clock me-1"></i>Hozir</span>
+    <a id="toastLink" href="#" class="btn btn-sm btn-primary"
+       style="border-radius:8px;font-size:0.8rem;font-weight:600;padding:4px 12px">
+      <i class="bi bi-bar-chart me-1"></i>Natijalarni ko'rish
+    </a>
+  </div>
+</div>
+
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<!-- ApexCharts — richer comparison & advanced charts -->
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.54.0/dist/apexcharts.min.js"></script>
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 {% block extra_js %}{% endblock %}
 
 <script>
-// Auto-dismiss alerts after 5 seconds
-setTimeout(() => {
-  document.querySelectorAll('.alert').forEach(el => {
-    const bsAlert = bootstrap.Alert.getOrCreateInstance(el);
-    if (bsAlert) bsAlert.close();
-  });
-}, 5000);
+// Auto-dismiss notifications that have data-auto-close attribute (errors stay until dismissed)
+document.querySelectorAll('.notif-card[data-auto-close]').forEach(el => {
+  const delay = parseInt(el.dataset.autoClose) || 6000;
+  setTimeout(() => {
+    el.style.animation = 'notifFadeOut .4s cubic-bezier(.4,0,.2,1) forwards';
+    setTimeout(() => el.remove(), 400);
+  }, delay);
+});
 
 // Delete confirmation modal
 document.addEventListener('DOMContentLoaded', function() {
@@ -255,37 +480,131 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 <script>
-  // Notification Polling
   function checkNotifications() {
     fetch('{% url "api_notifications" %}')
       .then(res => res.json())
       .then(data => {
-        if (data.notifications && data.notifications.length > 0) {
-          const n = data.notifications[0];
-          const toastEl = document.getElementById('analysisToast');
-          const toastMessage = document.getElementById('toastMessage');
-          const toastLink = document.getElementById('toastLink');
-          
-          if (n.status === 'done') {
-            toastMessage.innerText = "Tahlil muvaffaqiyatli yakunlandi!";
-            toastEl.classList.replace('bg-danger', 'bg-success');
-          } else {
-            toastMessage.innerText = "Tahlil jarayonida xatolik yuz berdi.";
-            toastEl.classList.replace('bg-success', 'bg-danger');
-          }
-          
-          toastLink.href = n.url;
-          const toast = new bootstrap.Toast(toastEl, { autohide: false });
-          toast.show();
+        if (!data.notifications || data.notifications.length === 0) return;
+        const n = data.notifications[0];
+
+        const toastEl       = document.getElementById('analysisToast');
+        const toastMessage  = document.getElementById('toastMessage');
+        const toastLink     = document.getElementById('toastLink');
+        const toastIcon     = document.getElementById('analysisToastIcon');
+        const toastIconWrap = document.getElementById('analysisToastIconWrap');
+        const toastTitle    = document.getElementById('analysisToastTitle');
+        const toastBusiness = document.getElementById('analysisToastBusiness');
+
+        const rec = n.final_recommendation;  // 'YES', 'NO', or null/undefined for failed
+        const isYes = rec === 'YES';
+        const isDone = !!rec;
+
+        if (isDone) {
+          toastTitle.textContent = isYes
+            ? 'Tahlil: Tavsiya Etiladi'
+            : 'Tahlil: Qo\'shimcha Tekshiruv';
+          toastIconWrap.style.background = isYes ? '#f0fdf4' : '#fef2f2';
+          toastIcon.className = isYes
+            ? 'bi bi-check-circle-fill text-success'
+            : 'bi bi-x-circle-fill text-danger';
+          toastMessage.textContent = isYes
+            ? 'Moliyaviy ko\'rsatkichlar qoniqarli. Natijalarni ko\'rishingiz mumkin.'
+            : 'Tahlil yakunlandi. Qo\'shimcha tekshiruv tavsiya etiladi.';
+        } else {
+          toastTitle.textContent = 'Tahlil Xatoligi';
+          toastIconWrap.style.background = '#fffbeb';
+          toastIcon.className = 'bi bi-exclamation-triangle-fill text-warning';
+          toastMessage.textContent = 'Tahlil jarayonida xatolik yuz berdi. Qayta urinib ko\'ring.';
         }
+
+        if (n.business_type) toastBusiness.textContent = n.business_type;
+        toastLink.href = n.dashboard_url || '#';
+
+        toastEl.classList.add('show');
+        setTimeout(() => toastEl.classList.remove('show'), 12000);
       })
-      .catch(err => console.error('Notification check failed:', err));
+      .catch(() => {});
   }
-  
-  // Polling interval: 10 seconds
+
   {% if user.is_authenticated %}
     setInterval(checkNotifications, 10000);
   {% endif %}
 </script>
+
+{% if user.is_authenticated %}
+<script>
+  // ── AI Provider Failover Alert ─────────────────────────────
+  let _lastAIAlertKey = null;  // Tracks the last alert we showed
+
+  function openAIModelDropdown() {
+    const toggle = document.querySelector('.navbar .bi-robot')?.closest('[data-bs-toggle="dropdown"]');
+    if (toggle) bootstrap.Dropdown.getOrCreateInstance(toggle).show();
+  }
+
+  function dismissAIAlert() {
+    document.getElementById('aiProviderAlert').style.display = 'none';
+    fetch('{% url "api_ai_provider_alert" %}', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '',
+        'Content-Type': 'application/json',
+      },
+    }).catch(() => {});
+  }
+
+  function checkAIProviderAlert() {
+    fetch('{% url "api_ai_provider_alert" %}')
+      .then(r => r.json())
+      .then(data => {
+        const a = data.alert;
+        if (!a) return;
+
+        // Use from+to+at as a unique key so we don't re-show the same alert
+        const key = `${a.from_provider}->${a.to_provider}@${a.at}`;
+        if (key === _lastAIAlertKey) return;
+        _lastAIAlertKey = key;
+
+        const card   = document.getElementById('aiProviderAlert');
+        const icon   = document.getElementById('aiAlertIcon');
+        const title  = document.getElementById('aiAlertTitle');
+        const body   = document.getElementById('aiAlertBody');
+        const timeEl = document.getElementById('aiAlertTime');
+
+        if (a.is_critical) {
+          card.className  = 'notif-card notif-error';
+          icon.className  = 'notif-ico c-error';
+          icon.innerHTML  = '<i class="bi bi-shield-exclamation"></i>';
+          title.textContent = 'Kritik: Barcha AI Provayderlar Ishlamayapti';
+          body.textContent  =
+            `${a.from_label} va boshqa barcha AI provayderlar ishlamay qoldi. ` +
+            `Tahlil test ma'lumotlari asosida bajarilmoqda. ` +
+            `Iltimos, API kalitlarni tekshiring va provayderni qo'lda almashtiring.`;
+        } else {
+          card.className  = 'notif-card notif-warning';
+          icon.className  = 'notif-ico c-warning';
+          icon.innerHTML  = '<i class="bi bi-robot"></i>';
+          title.textContent = 'AI Provayder Avtomatik O\'zgartirildi';
+          body.textContent  =
+            `${a.from_label} xatolik qaytardi. Tizim avtomatik ravishda ` +
+            `${a.to_label} ga o'tdi. Tahlil davom etmoqda. ` +
+            `Agar kerak bo'lsa, qo'lda almashtiring.`;
+        }
+
+        try {
+          const d = new Date(a.at);
+          timeEl.textContent = d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' });
+        } catch (_) { timeEl.textContent = ''; }
+
+        card.style.display = 'block';
+        card.style.animation = 'notifSlideIn .3s cubic-bezier(.4,0,.2,1)';
+      })
+      .catch(() => {});
+  }
+
+  // Check immediately on page load, then every 30 seconds
+  checkAIProviderAlert();
+  setInterval(checkAIProviderAlert, 30000);
+</script>
+{% endif %}
 </body>
 </html>

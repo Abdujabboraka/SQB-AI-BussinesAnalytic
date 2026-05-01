@@ -106,6 +106,8 @@ class GeminiService:
                 return str(v)
 
         return f"""SEN BANK BIZNES-TAHLIL EKSPERTISAN. O'ZBEK TILIDA JAVOB BER.
+MUHIM: Quyidagi "MIJOZ BIZNES TAVSIFI" bo'limidagi ma'lumotga alohida e'tibor ber.
+Tahlilning "commentary" va xulosalar qismida mijoz tavsifida aytilgan jihatlarni (mahsulot, maqsadli bozor, raqobat ustunligi) to'g'ridan-to'g'ri ko'zdan kechir.
 
 === MIJOZ BIZNES TAVSIFI ===
 {_f(req.business_description, 'Tavsif berilmagan')}

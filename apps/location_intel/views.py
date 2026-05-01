@@ -23,4 +23,8 @@ class BlockCView(LoginRequiredMixin, View):
             ctx['daily_labels'] = json.dumps(['Dushanba', 'Seshanba', 'Chorshanba',
                                               'Payshanba', 'Juma', 'Shanba', 'Yakshanba'])
             ctx['daily_data'] = json.dumps(block.daily_footfall)
+            ctx['comparison_json'] = json.dumps((block.raw_data or {}).get('comparison', []))
+            n300 = len(block.competitors_300m or [])
+            n1km = len(block.competitors_1km or []) - n300
+            ctx['density_json'] = json.dumps({'n300': n300, 'n1km': max(0, n1km)})
         return render(request, self.template_name, ctx)

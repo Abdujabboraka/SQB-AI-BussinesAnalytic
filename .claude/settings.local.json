@@ -7,7 +7,10 @@
       "Bash(python manage.py makemigrations core --name auto_pending)",
       "Bash(python manage.py check)",
       "Bash(python manage.py check --deploy)",
-      "Bash(python manage.py showmigrations core)"
+      "Bash(python manage.py showmigrations core)",
+      "Bash(python -c ' *)",
+      "Bash(python manage.py shell -c ' *)",
+      "Bash(python manage.py shell -c \"import os; print\\(os.environ.get\\('DJANGO_SETTINGS_MODULE'\\)\\); from django.conf import settings; print\\(settings.SETTINGS_MODULE if hasattr\\(settings,'SETTINGS_MODULE'\\) else 'n/a'\\)\")"
     ]
   }
 }

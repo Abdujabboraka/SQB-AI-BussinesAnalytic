@@ -63,6 +63,7 @@
     </div>
     <div class="p-2">
       <div id="competitor-map"
+           style="height:420px;border-radius:10px;overflow:hidden"
            data-lat="{{ analysis.latitude }}"
            data-lng="{{ analysis.longitude }}"
            data-competitors="{{ competitors_json }}"
@@ -72,13 +73,42 @@
     </div>
   </div>
 
-  <!-- Closure Probability Chart -->
+  <!-- Closure Probability + Scatter Row -->
   {% if block.competitors_1km %}
-  <div class="chart-wrapper mb-4">
-    <div class="chart-title">Raqobatchilarning Yopilish Ehtimoli (%)</div>
-    <div style="height:280px"><canvas id="closureChart"></canvas></div>
+  <div class="row g-4 mb-4">
+    <div class="col-lg-7">
+      <div class="chart-wrapper h-100">
+        <div class="chart-title">Raqobatchilarning Yopilish Ehtimoli (%)</div>
+        <div style="height:280px"><canvas id="closureChart"></canvas></div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="chart-wrapper h-100">
+        <div class="chart-title">Masofa vs Yopilish Riski</div>
+        <div id="apexScatter" style="min-height:280px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Risk Distribution -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">Raqobatchi Risk Taqsimoti</div>
+        <div id="apexRiskDonut" style="min-height:220px;"></div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">Bozor Ko'rsatkichlari</div>
+        <div id="apexRiskBar" style="min-height:220px;"></div>
+      </div>
+    </div>
   </div>
   {% endif %}
+
+  <!-- Comparison Panel -->
+  {% include 'blocks/_comparison_panel.html' with comparison_json=comparison_json block_label="E Blok — Raqobat" %}
 
   <!-- Entry Barriers -->
   {% if block.entry_barriers %}
@@ -120,11 +150,83 @@
 <script src="{% static 'js/charts.js' %}"></script>
 <script src="{% static 'js/map.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   {% if block %}
   initLocationMap('competitor-map');
   {% if block.competitors_1km %}
-  initClosureChart('closureChart', {{ comp_names }}, {{ comp_closure_probs }});
+  initClosureChart('closureChart', {{ comp_names|safe }}, {{ comp_closure_probs|safe }});
+
+  var scatter = {{ scatter_json|safe }};
+
+  /* ApexCharts Scatter — distance vs closure risk */
+  if (scatter.length) {
+    var scatterSeries = [
+      { name: 'Past risk (<15%)',    data: scatter.filter(function(d){return d.y <  15;}).map(function(d){return {x:d.x,y:d.y,name:d.name};}) },
+      { name: "O'rta risk (15–30%)", data: scatter.filter(function(d){return d.y >= 15 && d.y < 30;}).map(function(d){return {x:d.x,y:d.y,name:d.name};}) },
+      { name: 'Yuqori risk (≥30%)',  data: scatter.filter(function(d){return d.y >= 30;}).map(function(d){return {x:d.x,y:d.y,name:d.name};}) },
+    ];
+    try { new ApexCharts(document.getElementById('apexScatter'), {
+      chart: { type: 'scatter', height: 280, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent', zoom: { enabled: false } },
+      series: scatterSeries,
+      colors: ['#16A34A', '#D97706', '#DC2626'],
+      markers: { size: 8, strokeWidth: 0, hover: { size: 11 } },
+      xaxis: { title: { text: 'Masofa (metr)', style: { fontSize: '11px' } }, labels: { formatter: function(v){return v+'m';} } },
+      yaxis: { title: { text: 'Yopilish ehtimoli', style: { fontSize: '11px' } }, labels: { formatter: function(v){return v+'%';} }, min: 0, max: 100 },
+      legend: { position: 'top', fontSize: '11px' },
+      grid: { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 },
+      tooltip: {
+        custom: function(opts) {
+          var d = opts.w.config.series[opts.seriesIndex].data[opts.dataPointIndex];
+          return '<div style="padding:8px 12px;font-size:12px;">'
+            + '<b>' + (d.name || '?') + '</b><br>'
+            + 'Masofa: ' + d.x + 'm<br>'
+            + 'Yopilish ehtimoli: ' + d.y + '%'
+            + '</div>';
+        }
+      }
+    }).render(); } catch(e) { console.error('apexScatter:', e); }
+
+    /* ApexCharts Donut — risk category distribution */
+    var low = scatter.filter(function(d){return d.y < 15;}).length;
+    var med = scatter.filter(function(d){return d.y >= 15 && d.y < 30;}).length;
+    var hgh = scatter.filter(function(d){return d.y >= 30;}).length;
+    try { new ApexCharts(document.getElementById('apexRiskDonut'), {
+      chart: { type: 'donut', height: 220, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+      series: [low, med, hgh],
+      labels: ['Past risk', "O'rta risk", 'Yuqori risk'],
+      colors: ['#16A34A', '#D97706', '#DC2626'],
+      legend: { position: 'bottom', fontSize: '12px' },
+      plotOptions: { pie: { donut: { size: '60%', labels: {
+        show: true,
+        total: { show: true, label: 'Jami', fontSize: '13px', fontWeight: 700,
+                 formatter: function(w) { return w.globals.seriesTotals.reduce(function(a,b){return a+b;},0) + ' ta'; } }
+      } } } },
+      dataLabels: { formatter: function(v, opts) { return opts.w.config.series[opts.seriesIndex] + ' ta'; } },
+      tooltip: { y: { formatter: function(v) { return v + ' ta raqobatchi'; } } }
+    }).render(); } catch(e) { console.error('apexRiskDonut:', e); }
+
+    /* ApexCharts Bar — market risk vs churn */
+    try { new ApexCharts(document.getElementById('apexRiskBar'), {
+      chart: { type: 'bar', height: 220, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+      plotOptions: { bar: { horizontal: true, distributed: true, borderRadius: 5, barHeight: '50%' } },
+      series: [{ name: 'Daraja', data: [{{ block.market_risk_score|floatformat:1 }}, {{ block.district_churn_rate|floatformat:1 }}] }],
+      xaxis: {
+        categories: ['Bozor Risk Bali', 'Yillik Yopilish (%)'],
+        labels: { formatter: function(v){return v+'%';} , style: { fontSize: '11px' } }
+      },
+      yaxis: { max: 100 },
+      colors: [
+        {{ block.market_risk_score|floatformat:1 }} > 65 ? '#DC2626' : {{ block.market_risk_score|floatformat:1 }} > 40 ? '#D97706' : '#16A34A',
+        {{ block.district_churn_rate|floatformat:1 }} > 30 ? '#DC2626' : '#D97706',
+      ],
+      legend: { show: false },
+      dataLabels: { enabled: true, formatter: function(v){return v.toFixed(1)+'%';}, style: { fontSize: '11px', fontWeight: 700 } },
+      annotations: {
+        xaxis: [{ x: 50, borderColor: '#94a3b8', borderWidth: 1, strokeDashArray: 4, label: { text: 'O\'rta', style: { fontSize: '10px' } } }]
+      },
+      grid: { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 },
+    }).render(); } catch(e) { console.error('apexRiskBar:', e); }
+  }
   {% endif %}
   {% endif %}
 });

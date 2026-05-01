@@ -108,18 +108,37 @@
   </div>
 
   {% if form1.errors or form2.errors or form3.errors or form4.errors %}
-    <div class="alert alert-danger mb-4 border-0 shadow-sm d-flex align-items-center">
-      <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
-      <div>
-        <div class="fw-700">Iltimos, xatolarni to'g'rilang:</div>
-        <ul class="mb-0 small ps-3 mt-1">
-          {% for field, errors in form1.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
-          {% for field, errors in form2.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
-          {% for field, errors in form3.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
-          {% for field, errors in form4.errors.items %}<li>{{ errors.0 }}</li>{% endfor %}
+  <div style="background:#fff;border-radius:10px;border:1px solid #fca5a5;border-left:5px solid #dc2626;
+              box-shadow:0 4px 16px rgba(220,38,38,0.08);padding:16px 20px;margin-bottom:24px;">
+    <div style="display:flex;align-items:flex-start;gap:14px;">
+      <div style="width:40px;height:40px;background:#fef2f2;border-radius:9px;display:flex;
+                  align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="bi bi-pencil-square" style="color:#dc2626;font-size:1.15rem"></i>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:0.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+                    color:#0f172a;margin-bottom:4px">Ma'lumot Xatoligi</div>
+        <div style="font-size:0.875rem;color:#374151;margin-bottom:10px">
+          Formada to'ldirilmagan yoki noto'g'ri kiritilgan maydonlar mavjud.
+          Bu — sizning kirishingiz bilan bog'liq xatolik, tizim muammosi emas.
+        </div>
+        <ul style="margin:0;padding-left:18px;font-size:0.85rem;color:#b91c1c;line-height:1.7">
+          {% for field, errors in form1.errors.items %}
+            <li><strong>1-qadam:</strong> {{ errors.0 }}</li>
+          {% endfor %}
+          {% for field, errors in form2.errors.items %}
+            <li><strong>2-qadam:</strong> {{ errors.0 }}</li>
+          {% endfor %}
+          {% for field, errors in form3.errors.items %}
+            <li><strong>3-qadam:</strong> {{ errors.0 }}</li>
+          {% endfor %}
+          {% for field, errors in form4.errors.items %}
+            <li><strong>4-qadam:</strong> {{ errors.0 }}</li>
+          {% endfor %}
         </ul>
       </div>
     </div>
+  </div>
   {% endif %}
 
   <!-- Old Step Nav -->
@@ -199,15 +218,33 @@
         <div class="form-section-title mt-4">
           <i class="bi bi-pencil-square me-1"></i> Biznesingiz haqida yozing
         </div>
-        <div class="mb-4">
-          <label class="form-label fw-600">{{ form1.business_description.label }}</label>
+        <div class="mb-4"
+             style="background:linear-gradient(135deg,#EFF6FF 0%,#F0FDF4 100%);
+                    border:2px solid var(--primary-border);border-radius:12px;padding:20px">
+          <div class="d-flex align-items-start gap-3 mb-3">
+            <div style="width:40px;height:40px;background:var(--primary);border-radius:10px;
+                        display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <i class="bi bi-robot text-white" style="font-size:1.1rem"></i>
+            </div>
+            <div>
+              <div class="fw-700" style="color:var(--primary)">AI uchun asosiy ma'lumot</div>
+              <div class="small text-secondary mt-1">
+                Bu matn barcha tahlil bloklari uchun AI ga uzatiladi. Qanchalik batafsil yozsangiz — shunchalik aniqroq tahlil olasiz.
+                <strong>Mahsulotingiz, mijozlaringiz, raqobat ustunligingiz haqida yozing.</strong>
+              </div>
+            </div>
+          </div>
+          <label class="form-label fw-700" style="color:var(--text-primary)">{{ form1.business_description.label }}</label>
           {{ form1.business_description }}
           {% if form1.business_description.errors %}<div class="text-danger small mt-1">{{ form1.business_description.errors.0 }}</div>{% endif %}
-          <div class="d-flex justify-content-between mt-1">
-            <div class="progress" style="height:4px;width:100px;background:var(--border)">
-              <div id="charFill" class="progress-bar" style="width:0%"></div>
+          <div class="d-flex justify-content-between align-items-center mt-2">
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress" style="height:4px;width:120px;background:var(--border)">
+                <div id="charFill" class="progress-bar" style="width:0%"></div>
+              </div>
+              <span id="charCount" class="text-muted" style="font-size:0.7rem">0 belgi</span>
             </div>
-            <span id="charCount" class="text-muted" style="font-size:0.7rem">0 belgi</span>
+            <span class="small text-secondary"><i class="bi bi-lightbulb me-1 text-warning"></i>150+ belgi AI tahlil sifatini oshiradi</span>
           </div>
         </div>
 

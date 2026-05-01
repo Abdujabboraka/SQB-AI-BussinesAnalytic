@@ -20,6 +20,63 @@
 
   {% if not block %}
   <div class="card-premium p-5 text-center"><div style="font-size:3rem">⏳</div><h5 class="mt-3">Tahlil hali tugamagan</h5></div>
+  {% elif analysis.business_category_type == 'textile' or analysis.business_category_type == 'construction' %}
+
+  <!-- Non-location business type -->
+  <div class="card-premium mb-4">
+    <div class="card-header-premium">
+      <h6><i class="bi bi-info-circle me-2 text-bank"></i>Joylashuv Tahlili Bu Biznes Uchun Ahamiyatsiz</h6>
+    </div>
+    <div class="card-body-premium">
+      <div class="row g-4 align-items-center">
+        <div class="col-md-2 text-center">
+          <div style="font-size:3.5rem;opacity:0.5">🏭</div>
+        </div>
+        <div class="col-md-10">
+          <h5 class="fw-700 mb-2">
+            {% if analysis.business_category_type == 'textile' %}Tekstil Ishlab Chiqarish{% else %}Qurilish Korxonasi{% endif %}
+            — Joylashuv Modeli Boshqacha
+          </h5>
+          <p class="text-secondary mb-3">
+            Bu turdagi bizneslar uchun klassik "passajirlik oqimi" va "yaqin raqobatchilar" tahlili amaliy ahamiyat kasb etmaydi.
+            {% if analysis.business_category_type == 'textile' %}
+            Tekstil korxonalar ko'pincha sanoat hududlarda joylashadi va mahsulotlarini ulgurji savdogar yoki tarqatuvchilar orqali yetkazib beradi.
+            {% else %}
+            Qurilish kompaniyalari loyihalar bo'yicha ishlaydi va buyurtmalar ko'pincha tender orqali keladi — yo'lovchilar oqimi hal qiluvchi omil emas.
+            {% endif %}
+          </p>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div style="background:var(--primary-light);border:1px solid var(--primary-border);border-radius:10px;padding:16px">
+                <div class="fw-700 small text-bank mb-1"><i class="bi bi-truck me-1"></i>Etkazib berish hududi</div>
+                <div class="small text-secondary">Mahsulot yetkazib berish geografiyasi va logistika xarajatlari muhimroq</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div style="background:var(--success-light);border:1px solid var(--success-border);border-radius:10px;padding:16px">
+                <div class="fw-700 small text-success mb-1"><i class="bi bi-diagram-3 me-1"></i>Ta'minot zanjiri</div>
+                <div class="small text-secondary">Xom ashyo manbalari va ishlab chiqarish kapasiteti joylashuv omillaridan muhimroq</div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div style="background:var(--warning-light);border:1px solid var(--warning-border);border-radius:10px;padding:16px">
+                <div class="fw-700 small text-warning mb-1" style="color:var(--warning)!important"><i class="bi bi-buildings me-1"></i>B2B mijozlar</div>
+                <div class="small text-secondary">Ulgurji buyurtmachilar va sanoat miqyosidagi shartnomalar asosiy daromad manbai</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if block.ai_commentary %}
+  <div class="ai-commentary mb-4">
+    <div class="fw-700 mb-2 text-bank small text-uppercase"><i class="bi bi-robot me-1"></i>AI Xulosasi</div>
+    {{ block.ai_commentary|linebreaks }}
+  </div>
+  {% endif %}
+
   {% else %}
 
   {% if block.is_mock %}<div class="mock-warning mb-3"><i class="bi bi-info-circle"></i>Demo ma'lumotlar — OSM Overpass + sintetik oqim</div>{% endif %}
@@ -64,6 +121,7 @@
     </div>
     <div class="p-2">
       <div id="location-map"
+           style="height:420px;border-radius:10px;overflow:hidden"
            data-lat="{{ analysis.latitude }}"
            data-lng="{{ analysis.longitude }}"
            data-competitors="{{ competitors_json }}"
@@ -88,6 +146,25 @@
       </div>
     </div>
   </div>
+
+  <!-- Competitor Density + Isochrone Charts -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-5">
+      <div class="chart-wrapper h-100">
+        <div class="chart-title">Raqobatchilar Zichligi (radiusga ko'ra)</div>
+        <div id="apexDensity" style="min-height:220px;"></div>
+      </div>
+    </div>
+    <div class="col-md-7">
+      <div class="chart-wrapper h-100">
+        <div class="chart-title">Izoхrona Talab Taqqoslama (5 vs 10 daqiqa)</div>
+        <div id="apexIsochrone" style="min-height:220px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison Panel -->
+  {% include 'blocks/_comparison_panel.html' with comparison_json=comparison_json block_label="C Blok — Joylashuv" %}
 
   <!-- Anchor Businesses -->
   {% if block.anchor_businesses %}
@@ -126,11 +203,43 @@
 <script src="{% static 'js/charts.js' %}"></script>
 <script src="{% static 'js/map.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   {% if block %}
   initLocationMap('location-map');
-  initFootfallChart('hourlyChart', {{ hourly_labels }}, {{ hourly_data }}, '#1B4FD8');
-  initFootfallChart('dailyChart', {{ daily_labels }}, {{ daily_data }}, '#16A34A');
+  initFootfallChart('hourlyChart', {{ hourly_labels|safe }}, {{ hourly_data|safe }}, '#1B4FD8');
+  initFootfallChart('dailyChart', {{ daily_labels|safe }}, {{ daily_data|safe }}, '#16A34A');
+
+  var density = {{ density_json|safe }};
+
+  /* ApexCharts Donut — competitor density */
+  new ApexCharts(document.getElementById('apexDensity'), {
+    chart: { type: 'donut', height: 220, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    series: [density.n300, density.n1km],
+    labels: ['300m ichida', '300m–1km'],
+    colors: ['#DC2626', '#D97706'],
+    legend: { position: 'bottom', fontSize: '12px' },
+    plotOptions: { pie: { donut: { size: '62%', labels: {
+      show: true,
+      total: { show: true, label: 'Jami', fontSize: '13px', fontWeight: 700,
+               formatter: function(w) { return w.globals.seriesTotals.reduce(function(a,b){return a+b;},0) + ' ta'; } }
+    } } } },
+    dataLabels: { enabled: true, formatter: function(v, opts) { return opts.w.config.series[opts.seriesIndex] + ' ta'; } },
+    tooltip: { y: { formatter: function(v) { return v + ' ta raqobatchi'; } } }
+  }).render();
+
+  /* ApexCharts Bar — isochrone demand */
+  new ApexCharts(document.getElementById('apexIsochrone'), {
+    chart: { type: 'bar', height: 220, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    plotOptions: { bar: { horizontal: false, columnWidth: '36%', borderRadius: 7, distributed: true } },
+    series: [{ name: 'Potentsial mijozlar', data: [{{ block.isochrone_demand_5min }}, {{ block.isochrone_demand_10min }}] }],
+    xaxis: { categories: ['5 daqiqa (piyoda)', '10 daqiqa (piyoda)'], labels: { style: { fontSize: '11px' } } },
+    yaxis: { labels: { formatter: function(v) { return v.toLocaleString() + ' kishi'; } } },
+    colors: ['#1B4FD8', '#7C3AED'],
+    legend: { show: false },
+    dataLabels: { enabled: true, formatter: function(v) { return v.toLocaleString(); }, style: { fontSize: '11px', fontWeight: 700 } },
+    grid: { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 },
+    tooltip: { y: { formatter: function(v) { return v.toLocaleString() + ' potentsial mijoz'; } } }
+  }).render();
   {% endif %}
 });
 </script>

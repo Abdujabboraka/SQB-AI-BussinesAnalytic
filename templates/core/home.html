@@ -120,8 +120,13 @@
                   <a href="{% url 'analysis_status_page' pk=a.pk %}" class="btn btn-outline-bank btn-sm">
                     <i class="bi bi-hourglass-split me-1"></i>Kutish
                   </a>
-                {% else %}
-
+                {% elif a.status == 'failed' %}
+                  <form method="post" action="{% url 'analysis_retry' pk=a.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning btn-sm fw-600" title="Qayta urinish">
+                      <i class="bi bi-arrow-clockwise me-1"></i>Retry
+                    </button>
+                  </form>
                   <a href="{% url 'analysis_edit' pk=a.pk %}"
                      class="btn btn-sm btn-outline-bank"
                      title="Tahrirlash va qayta yuborish" data-bs-toggle="tooltip">

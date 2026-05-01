@@ -24,4 +24,10 @@ class BlockBView(LoginRequiredMixin, View):
             ctx['forecast_high'] = json.dumps([int(v) for v in block.confidence_high_12])
             ctx['weekly_labels'] = json.dumps(['Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sha', 'Ya'])
             ctx['weekly_data'] = json.dumps(block.seasonality_weekly)
+            ctx['comparison_json'] = json.dumps((block.raw_data or {}).get('comparison', []))
+            ctx['p_series_json'] = json.dumps({
+                'p10': block.revenue_p10,
+                'p50': block.revenue_p50,
+                'p90': block.revenue_p90,
+            })
         return render(request, self.template_name, ctx)

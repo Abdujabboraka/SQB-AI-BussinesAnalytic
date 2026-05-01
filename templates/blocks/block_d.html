@@ -85,6 +85,25 @@
     </div>
   </div>
 
+  <!-- Radial gauges for key metrics -->
+  <div class="row g-4 mb-4">
+    <div class="col-md-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">Moliyaviy Ko'rsatkichlar Ballari</div>
+        <div id="apexRadial" style="min-height:240px;"></div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="chart-wrapper">
+        <div class="chart-title">ROI va BEP Taqqoslama</div>
+        <div id="apexRoiBep" style="min-height:240px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Comparison Panel -->
+  {% include 'blocks/_comparison_panel.html' with comparison_json=comparison_json block_label="D Blok — Moliya" %}
+
   <!-- Unit Economics -->
   <div class="card-premium mb-4">
     <div class="card-header-premium"><h6><i class="bi bi-calculator me-2 text-bank"></i>Birlik Iqtisodiyoti</h6></div>
@@ -133,10 +152,57 @@
 {% block extra_js %}
 <script src="{% static 'js/charts.js' %}"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   {% if block %}
-  initHistogramChart('histogramChart', {{ mc_distribution }});
-  initCashFlowChart('cashflowChart', {{ cashflow_labels }}, {{ cashflow_data }});
+  initHistogramChart('histogramChart', {{ mc_distribution|safe }});
+  initCashFlowChart('cashflowChart', {{ cashflow_labels|safe }}, {{ cashflow_data|safe }});
+
+  var r = {{ radial_json|safe }};
+
+  /* ApexCharts RadialBar — multi-metric gauges */
+  new ApexCharts(document.getElementById('apexRadial'), {
+    chart: { type: 'radialBar', height: 240, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    series: [r.mc_score, r.viability],
+    labels: ['MC Muvaffaqiyat', 'Maqsadga moslik'],
+    colors: [
+      r.mc_score >= 70 ? '#16A34A' : r.mc_score >= 50 ? '#D97706' : '#DC2626',
+      r.viability >= 70 ? '#16A34A' : r.viability >= 45 ? '#D97706' : '#DC2626',
+    ],
+    plotOptions: {
+      radialBar: {
+        hollow: { size: '22%', margin: 8 },
+        track: { margin: 6 },
+        dataLabels: {
+          name: { fontSize: '11px', offsetY: -4 },
+          value: { fontSize: '14px', fontWeight: 700, formatter: function(v) { return v + '%'; } },
+          total: { show: true, label: 'Umumiy', fontSize: '12px',
+                   formatter: function(w) { return Math.round(w.globals.seriesTotals.reduce(function(a,b){return a+b;},0)/w.globals.series.length) + '%'; } }
+        }
+      }
+    },
+    legend: { show: true, position: 'bottom', fontSize: '11px' }
+  }).render();
+
+  /* ApexCharts Bar — ROI 12mo vs ROI 36mo */
+  new ApexCharts(document.getElementById('apexRoiBep'), {
+    chart: { type: 'bar', height: 240, toolbar: { show: false }, fontFamily: 'Inter,sans-serif', background: 'transparent' },
+    plotOptions: { bar: { horizontal: false, columnWidth: '38%', borderRadius: 6 } },
+    series: [
+      { name: 'ROI 12 oy (%)', data: [{{ block.roi_12mo|floatformat:1 }}] },
+      { name: 'ROI 36 oy (%)', data: [{{ block.roi_36mo|floatformat:1 }}] },
+    ],
+    xaxis: { categories: ['ROI Taqqoslama'], labels: { style: { fontSize: '11px' } } },
+    yaxis: { labels: { formatter: function(v) { return v.toFixed(1) + '%'; } } },
+    colors: ['#1B4FD8', '#16A34A'],
+    dataLabels: { enabled: true, formatter: function(v) { return v.toFixed(1) + '%'; }, style: { fontSize: '11px', fontWeight: 700 } },
+    annotations: {
+      yaxis: [{ y: 0, borderColor: '#DC2626', borderWidth: 2, strokeDashArray: 4,
+                label: { text: 'Zarar chegarasi', style: { fontSize: '10px', color: '#DC2626', background: '#FEF2F2' } } }]
+    },
+    grid: { borderColor: 'rgba(100,116,139,0.1)', strokeDashArray: 4 },
+    legend: { position: 'top', fontSize: '12px' },
+    tooltip: { y: { formatter: function(v) { return v.toFixed(1) + '%'; } } }
+  }).render();
   {% endif %}
 });
 </script>

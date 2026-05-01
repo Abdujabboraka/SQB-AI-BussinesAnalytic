@@ -4,6 +4,7 @@ import math
 import requests
 from django.db import OperationalError
 import threading
+from datetime import timedelta
 from django.conf import settings
 from django.views import View
 from django.views.generic import TemplateView, ListView
@@ -12,8 +13,11 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.contrib import messages
+from django.db.models import Count, Avg, Q, Sum
+from django.db.models.functions import TruncDate
+from django.utils import timezone
 
 from .models import BusinessAnalysisRequest, UserProfile, Zalog
 from .forms import (
@@ -225,7 +229,39 @@ class AnalysisCreateView(LoginRequiredMixin, View):
 
         except Exception as e:
             logger.exception("Error creating analysis request")
-            messages.error(request, f"Xato: {str(e)}")
+            from django.db import IntegrityError, DatabaseError as DjDatabaseError
+            err_lower = str(e).lower()
+            if isinstance(e, (IntegrityError, DjDatabaseError)) or any(
+                kw in err_lower for kw in ('unique', 'integrity', 'database', 'operational', 'no such table', 'column')
+            ):
+                messages.error(
+                    request,
+                    "Ma'lumotlar bazasida xatolik yuz berdi. Sahifani yangilab qayta urinib ko'ring. "
+                    "Muammo davom etsa, texnik xizmat bilan bog'laning.",
+                    extra_tags='system_error',
+                )
+            elif isinstance(e, (ValueError, TypeError)) or any(
+                kw in err_lower for kw in ('value', 'invalid', 'choice', 'field', 'decode', 'json')
+            ):
+                messages.error(
+                    request,
+                    "Kiritilgan ma'lumotlarda xato aniqlandi. Iltimos, barcha maydonlarni "
+                    "to'g'ri to'ldirib, qayta yuboring.",
+                    extra_tags='input_error',
+                )
+            elif any(kw in err_lower for kw in ('connection', 'timeout', 'network', 'refused', 'ssl', 'socket')):
+                messages.error(
+                    request,
+                    "Tashqi xizmatga ulanishda muammo yuz berdi. Internet aloqasini tekshiring "
+                    "va bir necha daqiqadan so'ng qayta urinib ko'ring.",
+                    extra_tags='system_error',
+                )
+            else:
+                messages.error(
+                    request,
+                    "Noma'lum tizim xatoligi yuz berdi. Iltimos, keyinroq qayta urinib ko'ring.",
+                    extra_tags='system_error',
+                )
             return redirect('home')
 
     def _save_category_detail(self, analysis, category, data):
@@ -827,8 +863,8 @@ class RegisterView(View):
 class SwitchAIProviderView(LoginRequiredMixin, View):
     """Allows Admin/Officer to quickly switch the AI backend via the UI."""
     def get(self, request, provider):
-        # We only allow changing to known providers
-        if provider not in ['gemini', 'openai', 'anthropic', 'huggingface']:
+        from services.ai_dispatcher import PROVIDER_REGISTRY
+        if provider not in PROVIDER_REGISTRY or provider == 'mock':
             messages.error(request, "Noma'lum AI provayderi tanlandi.")
             return redirect(request.META.get('HTTP_REFERER', 'home'))
 
@@ -859,10 +895,15 @@ class AnalysisRetryView(LoginRequiredMixin, View):
         analysis.save(update_fields=['status', 'progress_pct', 'completed_blocks',
                                      'warning_flag', 'warning_message', 'is_notified'])
         try:
-            from apps.core.tasks import run_full_analysis
-            task = run_full_analysis.delay(analysis.pk)
-            analysis.celery_task_id = task.id if hasattr(task, 'id') else ''
-            analysis.save(update_fields=['celery_task_id'])
+            from apps.core.tasks import run_full_analysis, run_analysis_sync
+            if getattr(settings, 'USE_CELERY', False):
+                task = run_full_analysis.delay(analysis.pk)
+                analysis.celery_task_id = task.id if hasattr(task, 'id') else ''
+                analysis.save(update_fields=['celery_task_id'])
+            else:
+                thread = threading.Thread(target=run_analysis_sync, args=(analysis.pk,))
+                thread.daemon = True
+                thread.start()
             messages.success(request, "Tahlil qayta boshlandi!")
         except Exception as e:
             analysis.status = 'failed'
@@ -908,6 +949,22 @@ class ZalogCheckAPIView(View):
         except Zalog.DoesNotExist:
             return JsonResponse({'found': False, 'error': 'Zalog topilmadi'}, status=404)
 
+class AIProviderAlertAPIView(LoginRequiredMixin, View):
+    """
+    GET  — return the current provider-switch alert (if any) from cache.
+    POST — dismiss (delete) the alert so it won't show again until next switch.
+    """
+    def get(self, request):
+        from django.core.cache import cache
+        alert = cache.get('ai_provider_switch_alert')
+        return JsonResponse({'alert': alert})
+
+    def post(self, request):
+        from django.core.cache import cache
+        cache.delete('ai_provider_switch_alert')
+        return JsonResponse({'ok': True})
+
+
 class AnalysisNotificationAPIView(LoginRequiredMixin, View):
     """
     Returns a list of completed/failed analyses that haven't been notified yet.
@@ -933,6 +990,265 @@ class AnalysisNotificationAPIView(LoginRequiredMixin, View):
             # Mark as notified immediately
             a.is_notified = True
             a.save(update_fields=['is_notified'])
-            
+
         return JsonResponse({'notifications': notifications})
+
+
+# ══════════════════════════════════════════════════════════════
+# ADMIN STATISTICS VIEW
+# ══════════════════════════════════════════════════════════════
+
+class AdminStatsView(LoginRequiredMixin, TemplateView):
+    template_name = 'core/admin_stats.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return self.handle_no_permission()
+        profile = getattr(request.user, 'profile', None)
+        if not profile or not profile.is_officer():
+            return HttpResponseForbidden("Ruxsat yo'q — faqat bank xodimlari uchun")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.market_analysis.models import BlockAResult
+        from apps.demand_forecast.models import BlockBResult
+        from apps.location_intel.models import BlockCResult
+        from apps.financial_viability.models import BlockDResult
+        from apps.competition_risk.models import BlockEResult
+
+        now = timezone.now()
+        qs = BusinessAnalysisRequest.objects.all()
+        done_qs = qs.filter(status='done')
+
+        # ── Overview KPIs ──────────────────────────────────────────
+        total = qs.count()
+        done_count = done_qs.count()
+        failed_count = qs.filter(status='failed').count()
+        active_count = qs.filter(status__in=['processing', 'pending']).count()
+        yes_count = qs.filter(final_recommendation='YES').count()
+        no_count = qs.filter(final_recommendation='NO').count()
+        caution_count = qs.filter(final_recommendation='CAUTION').count()
+        total_users = User.objects.filter(profile__role='CLIENT').count()
+        users_this_month = User.objects.filter(date_joined__gte=now - timedelta(days=30)).count()
+        analyses_today = qs.filter(created_at__date=now.date()).count()
+        analyses_this_week = qs.filter(created_at__gte=now - timedelta(days=7)).count()
+        analyses_this_month = qs.filter(created_at__gte=now - timedelta(days=30)).count()
+
+        success_rate = round(yes_count / done_count * 100, 1) if done_count else 0
+        completion_rate = round(done_count / total * 100, 1) if total else 0
+
+        ctx.update({
+            'total': total,
+            'done_count': done_count,
+            'failed_count': failed_count,
+            'active_count': active_count,
+            'yes_count': yes_count,
+            'no_count': no_count,
+            'caution_count': caution_count,
+            'total_users': total_users,
+            'users_this_month': users_this_month,
+            'analyses_today': analyses_today,
+            'analyses_this_week': analyses_this_week,
+            'analyses_this_month': analyses_this_month,
+            'success_rate': success_rate,
+            'completion_rate': completion_rate,
+        })
+
+        # ── Status + Recommendation JSON (for donuts) ──────────────
+        ctx['status_json'] = json.dumps([
+            {'x': 'Tayyor', 'y': done_count, 'color': '#16A34A'},
+            {'x': 'Jarayonda', 'y': active_count, 'color': '#D97706'},
+            {'x': 'Xato', 'y': failed_count, 'color': '#DC2626'},
+        ])
+        ctx['recommendation_json'] = json.dumps([
+            {'x': "HA (YES)", 'y': yes_count, 'color': '#16A34A'},
+            {'x': "YO'Q (NO)", 'y': no_count, 'color': '#DC2626'},
+            {'x': 'EHTIYOT', 'y': caution_count, 'color': '#D97706'},
+            {'x': "Ko'rib chiqilmagan", 'y': total - yes_count - no_count - caution_count, 'color': '#94A3B8'},
+        ])
+
+        # ── Trend: last 30 days ────────────────────────────────────
+        thirty_ago = now - timedelta(days=30)
+        trend_raw = (
+            qs.filter(created_at__gte=thirty_ago)
+            .annotate(day=TruncDate('created_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .order_by('day')
+        )
+        trend_map = {str(r['day']): r['count'] for r in trend_raw}
+        trend_labels, trend_values = [], []
+        for i in range(30):
+            day = (thirty_ago + timedelta(days=i + 1)).date()
+            trend_labels.append(day.strftime('%d.%m'))
+            trend_values.append(trend_map.get(str(day), 0))
+        ctx['trend_labels_json'] = json.dumps(trend_labels)
+        ctx['trend_values_json'] = json.dumps(trend_values)
+
+        # ── By Category ────────────────────────────────────────────
+        CAT_LABELS = {
+            'hotel': 'Mehmonxona',
+            'tourism': 'Turizm',
+            'construction': 'Qurilish',
+            'textile': 'Tekstil',
+            'trade': 'Savdo',
+            'services': 'Xizmat',
+        }
+        by_cat_raw = (
+            qs.values('business_category_type')
+            .annotate(
+                total=Count('id'),
+                yes=Count('id', filter=Q(final_recommendation='YES')),
+                no=Count('id', filter=Q(final_recommendation='NO')),
+                caution=Count('id', filter=Q(final_recommendation='CAUTION')),
+            )
+            .order_by('-total')
+        )
+        by_category = [
+            {
+                'label': CAT_LABELS.get(r['business_category_type'], r['business_category_type'] or 'Boshqa'),
+                'total': r['total'],
+                'yes': r['yes'],
+                'no': r['no'],
+                'caution': r['caution'],
+            }
+            for r in by_cat_raw
+        ]
+        ctx['by_category_json'] = json.dumps(by_category)
+
+        # ── By District (top 10) ───────────────────────────────────
+        by_district_raw = (
+            qs.filter(district__isnull=False).exclude(district='')
+            .values('district')
+            .annotate(
+                total=Count('id'),
+                yes=Count('id', filter=Q(final_recommendation='YES')),
+            )
+            .order_by('-total')[:10]
+        )
+        by_district = [
+            {
+                'label': r['district'],
+                'total': r['total'],
+                'yes': r['yes'],
+                'rate': round(r['yes'] / r['total'] * 100, 1) if r['total'] else 0,
+            }
+            for r in by_district_raw
+        ]
+        ctx['by_district_json'] = json.dumps(by_district)
+
+        # ── Credit Tier Distribution ───────────────────────────────
+        tier_counts = (
+            done_qs.exclude(credit_tier='').exclude(credit_tier__isnull=True)
+            .values('credit_tier')
+            .annotate(count=Count('id'))
+            .order_by('-count')
+        )
+        ctx['credit_tier_json'] = json.dumps([
+            {'x': r['credit_tier'], 'y': r['count']} for r in tier_counts
+        ])
+
+        # ── Average Block Scores ───────────────────────────────────
+        ba = BlockAResult.objects.aggregate(
+            avg_niche=Avg('niche_opportunity_score'),
+            avg_gap=Avg('gap_score'),
+            avg_sat=Avg('saturation_index'),
+        )
+        bb = BlockBResult.objects.aggregate(avg_demand=Avg('demand_score'))
+        bc = BlockCResult.objects.filter(
+            raw_data__skipped__isnull=True
+        ).aggregate(avg_loc=Avg('location_score'))
+        bd = BlockDResult.objects.aggregate(
+            avg_viability=Avg('viability_score'),
+            avg_mc=Avg('mc_success_probability'),
+            avg_roi12=Avg('roi_12mo'),
+        )
+        be = BlockEResult.objects.aggregate(
+            avg_risk=Avg('market_risk_score'),
+            avg_churn=Avg('district_churn_rate'),
+        )
+        final_avg = done_qs.aggregate(
+            avg_score=Avg('final_score'),
+            avg_sqb=Avg('sqb_composite_score'),
+        )
+
+        def _r(v): return round(v, 1) if v is not None else 0
+
+        ctx['block_scores_json'] = json.dumps([
+            {'block': 'A · Bozor', 'score': _r(ba['avg_niche']), 'color': '#1B4FD8'},
+            {'block': 'B · Talab', 'score': _r(bb['avg_demand']), 'color': '#7C3AED'},
+            {'block': 'C · Joylashuv', 'score': _r(bc['avg_loc']), 'color': '#0891B2'},
+            {'block': 'D · Moliya', 'score': _r(bd['avg_viability']), 'color': '#16A34A'},
+            {'block': 'E · Raqobat', 'score': _r(100 - (be['avg_risk'] or 50)), 'color': '#D97706'},
+        ])
+        ctx['avg_final_score'] = _r(final_avg['avg_score'])
+        ctx['avg_sqb_score'] = _r(final_avg['avg_sqb'])
+        ctx['avg_mc_success'] = _r(bd['avg_mc'])
+        ctx['avg_roi_12'] = _r(bd['avg_roi12'])
+
+        # ── Financial Averages ─────────────────────────────────────
+        fin = qs.aggregate(
+            avg_invest=Avg('investment_amount'),
+            avg_loan=Avg('loan_amount'),
+            avg_revenue=Avg('target_monthly_revenue'),
+        )
+        sqb_fin = done_qs.exclude(sqb_dsc_ratio__isnull=True).aggregate(
+            avg_dsc=Avg('sqb_dsc_ratio'),
+            avg_coll=Avg('sqb_collateral_coverage'),
+            avg_debt=Avg('sqb_debt_burden_pct'),
+        )
+        ctx.update({
+            'avg_investment': _r(float(fin['avg_invest'] or 0) / 1e6),
+            'avg_loan': _r(float(fin['avg_loan'] or 0) / 1e6),
+            'avg_revenue': _r(float(fin['avg_revenue'] or 0) / 1e6),
+            'avg_dsc': _r(sqb_fin['avg_dsc']),
+            'avg_collateral': _r(sqb_fin['avg_coll']),
+            'avg_debt_burden': _r(sqb_fin['avg_debt']),
+        })
+
+        # ── SQB Recommendation distribution ───────────────────────
+        sqb_counts = (
+            done_qs.exclude(sqb_recommendation_color='')
+            .values('sqb_recommendation_color')
+            .annotate(count=Count('id'))
+        )
+        ctx['sqb_verdict_json'] = json.dumps([
+            {'x': r['sqb_recommendation_color'] or 'N/A', 'y': r['count']}
+            for r in sqb_counts
+        ])
+
+        # ── Top active users ───────────────────────────────────────
+        top_users = (
+            qs.values('client__username', 'client__first_name', 'client__last_name')
+            .annotate(total=Count('id'), success=Count('id', filter=Q(final_recommendation='YES')))
+            .order_by('-total')[:8]
+        )
+        ctx['top_users'] = [
+            {
+                'name': (f"{r['client__first_name']} {r['client__last_name']}").strip() or r['client__username'],
+                'total': r['total'],
+                'success': r['success'],
+            }
+            for r in top_users
+        ]
+
+        # ── Recent analyses ────────────────────────────────────────
+        ctx['recent_analyses'] = (
+            qs.select_related('client')
+            .order_by('-created_at')[:15]
+        )
+
+        # ── MCC / Business type breakdown ─────────────────────────
+        top_mcc = (
+            qs.values('mcc_code', 'business_type')
+            .annotate(total=Count('id'))
+            .order_by('-total')[:8]
+        )
+        ctx['top_mcc_json'] = json.dumps([
+            {'x': (r['business_type'] or r['mcc_code'] or '?')[:30], 'y': r['total']}
+            for r in top_mcc
+        ])
+
+        return ctx
 
